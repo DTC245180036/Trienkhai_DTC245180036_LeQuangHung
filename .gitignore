@@ -21,7 +21,6 @@ yarn-error.log*
 # 4. Word Reports & Generator Scripts (Giữ cục bộ, không đưa vào code repo)
 *.docx
 generate_*.py
-HUONG_DAN_CHAY_VA_VAN_DAP.md
 __pycache__/
 *.pyc
 
