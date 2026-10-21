@@ -1,0 +1,147 @@
+services:
+  # 1. Reverse Proxy Đứng Đầu Hệ Thống
+  nginx:
+    image: nginx:alpine
+    container_name: clinic_proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - clinic_static:/var/www/static:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - frontend_net
+
+  # 2. Giao Diện Người Dùng (Frontend Portal)
+  frontend:
+    image: nginx:alpine
+    container_name: clinic_frontend
+    restart: always
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    networks:
+      - frontend_net
+
+  # 3. Ứng Dụng Xử Lý Nghiệp Vụ (Backend API)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: clinic_api
+    restart: always
+    environment:
+      - DB_HOST=postgres_db
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - REDIS_HOST=clinic_redis
+      - REDIS_PORT=6379
+      - PORT=8000
+    volumes:
+      - ./backend/server.js:/app/server.js
+      - clinic_static:/app/uploads
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - frontend_net
+      - backend_net
+
+  # 4. Cơ Sở Dữ Liệu Bệnh Án (PostgreSQL)
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: clinic_db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend_net
+
+  # 5. Hệ Thống Cache & Queue Cấp Số (Redis)
+  redis:
+    image: redis:7-alpine
+    container_name: clinic_redis
+    restart: always
+    networks:
+      - backend_net
+
+  # 6. Thu Thập Số Liệu Phần Cứng Máy Chủ (Node Exporter)
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: clinic_node_exporter
+    restart: always
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+    networks:
+      - monitor_net
+
+  # 7. Máy Chủ Thu Thập Metrics (Prometheus)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: clinic_prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    networks:
+      - monitor_net
+      - backend_net
+
+  # 8. Dashboard Trực Quan Hóa (Grafana)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: clinic_grafana
+    restart: always
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - monitor_net
+
+networks:
+  frontend_net:
+    driver: bridge
+  backend_net:
+    driver: bridge
+  monitor_net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  promdata:
+  grafanadata:
+  clinic_static:

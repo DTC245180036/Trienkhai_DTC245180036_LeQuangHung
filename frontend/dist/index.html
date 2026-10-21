@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hệ Thống Quản Lý Phòng Khám (HMS) - Triển Khai & Quản Trị Hệ Thống</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- 1. THANH CHUYỂN ĐỔI VAI TRÒ DÀNH CHO BUỔI THI VẤN ĐÁP (DEMO CONTROLLER) -->
+  <aside class="demo-bar" aria-label="Thanh điều khiển nhanh kịch bản bảo vệ môn học">
+    <div class="demo-title">
+      <span class="badge-exam">BẢO VỆ MÔN HỌC</span>
+      <span>HỆ THỐNG QUẢN LÝ PHÒNG KHÁM (HMS)</span>
+    </div>
+
+    <nav class="role-switcher" aria-label="Chuyển đổi vai trò">
+      <span style="font-size: 0.75rem; color: #94a3b8; margin-right: 4px;">Chuyển vai trò:</span>
+      <button class="role-btn active" data-role="RECEPTIONIST" id="btn-role-receptionist">
+        📋 Tiếp Tân
+      </button>
+      <button class="role-btn" data-role="DOCTOR" id="btn-role-doctor">
+        🩺 Bác Sĩ
+      </button>
+      <button class="role-btn" data-role="CASHIER" id="btn-role-cashier">
+        💳 Thu Ngân
+      </button>
+      <button class="role-btn" data-role="ADMIN" id="btn-role-admin">
+        👑 Quản Trị / DevOps
+      </button>
+    </nav>
+
+    <div class="server-status">
+      <span class="status-dot" id="server-dot"></span>
+      <span id="server-text">Kiểm tra kết nối API...</span>
+    </div>
+  </aside>
+
+  <!-- 2. HEADER ỨNG DỤNG Y TẾ -->
+  <header class="app-header">
+    <div class="logo-area">
+      <div class="logo-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M19 10.5H13.5V5C13.5 4.17 12.83 3.5 12 3.5C11.17 3.5 10.5 4.17 10.5 5V10.5H5C4.17 10.5 3.5 11.17 3.5 12C3.5 12.83 4.17 13.5 5 13.5H10.5V19C10.5 19.83 11.17 20.5 12 20.5C12.83 20.5 13.5 19.83 13.5 19V13.5H19C19.83 13.5 20.5 12.83 20.5 12C20.5 11.17 19.83 10.5 19 10.5Z" fill="white"/>
+          <path d="M6.5 12H9L10.5 9.5L13.5 14.5L15 12H17.5" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <h1>MEDICARE CLINIC PRO</h1>
+        <span>Hệ thống Quản lý Khám chữa bệnh & Triển khai Đa Tầng</span>
+      </div>
+    </div>
+
+    <nav class="nav-tabs" aria-label="Điều hướng chính">
+      <button class="nav-tab active" data-tab="tab-reception" id="nav-reception">
+        📋 Tiếp Nhận & Hàng Đợi
+      </button>
+      <button class="nav-tab" data-tab="tab-doctor" id="nav-doctor">
+        🩺 Phòng Khám Bác Sĩ
+      </button>
+      <button class="nav-tab" data-tab="tab-cashier" id="nav-cashier">
+        💳 Thu Ngân & Viện Phí
+      </button>
+      <button class="nav-tab" data-tab="tab-admin" id="nav-admin">
+        ⚙️ Quản Trị & Giám Sát Hạ Tầng
+      </button>
+    </nav>
+
+    <div class="user-profile">
+      <div class="user-avatar" id="current-avatar">LT</div>
+      <div class="user-info">
+        <div class="user-name" id="current-name">Nguyễn Thị Hoa (Lễ Tân)</div>
+        <div class="user-role" id="current-role">LỄ TÂN (Tiếp nhận & Cấp số)</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 3. NỘI DUNG CHÍNH (MAIN CONTAINER) -->
+  <main class="main-content">
+
+    <!-- KPI THỐNG KÊ TỔNG QUAN -->
+    <section class="stats-grid" id="stats-section">
+      <div class="stat-card">
+        <div class="stat-icon blue">👥</div>
+        <div class="stat-details">
+          <h3 id="stat-patients">--</h3>
+          <p>Tổng Hồ sơ Bệnh nhân</p>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon amber">⏳</div>
+        <div class="stat-details">
+          <h3 id="stat-waiting">--</h3>
+          <p>Đang Chờ Khám Hôm Nay</p>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon purple">🩺</div>
+        <div class="stat-details">
+          <h3 id="stat-completed">--</h3>
+          <p>Lượt Đã Khám Xong</p>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green">💵</div>
+        <div class="stat-details">
+          <h3 id="stat-revenue">-- đ</h3>
+          <p>Doanh Thu Đã Thu</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- TAB 1: TIẾP NHẬN BỆNH NHÂN & CẤP SỐ THỨ TỰ (RECEPTION) -->
+    <!-- ======================================================== -->
+    <div id="tab-reception" class="tab-pane active">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>📋 Tiếp Nhận Bệnh Nhân & Hàng Đợi Khám Trong Ngày</span>
+          </div>
+          <div>
+            <button class="btn btn-primary" id="btn-open-new-patient">
+              ➕ Tiếp Nhận & Cấp Số Mới
+            </button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 80px;">STT</th>
+                <th>Bệnh Nhân</th>
+                <th>CCCD / Năm Sinh</th>
+                <th>Số Điện Thoại</th>
+                <th>Bác Sĩ Tiếp Nhận</th>
+                <th>Triệu Chứng</th>
+                <th>Trạng Thái</th>
+                <th style="text-align: right;">Thao Tác</th>
+              </tr>
+            </thead>
+            <tbody id="appointment-tbody">
+              <tr>
+                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">
+                  Đang tải danh sách hàng đợi khám...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- TAB 2: PHÒNG KHÁM BÁC SĨ (DOCTOR EXAMINATION & EMR)    -->
+    <!-- ======================================================== -->
+    <div id="tab-doctor" class="tab-pane" style="display: none;">
+      <div style="display: grid; grid-template-columns: 340px 1fr; gap: 24px;">
+        <!-- Cột trái: Hàng đợi bệnh nhân đang chờ -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span>🩺 Hàng Đợi Bác Sĩ</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-refresh-queue" title="Làm mới danh sách">🔄</button>
+          </div>
+          <div style="margin-bottom: 14px;">
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">LỌC THEO PHÒNG KHÁM / BÁC SĨ:</label>
+            <select class="form-control" id="doctor-filter-select" style="font-size: 0.82rem; padding: 7px 10px; font-weight: 600;">
+              <option value="all">🏥 Tất cả phòng khám / bác sĩ</option>
+            </select>
+          </div>
+          <div id="doctor-queue-list">
+            <p style="color: var(--text-muted); font-size: 0.85rem;">Đang tải danh sách...</p>
+          </div>
+        </div>
+
+        <!-- Cột phải: Form khám bệnh, chỉ định CLS & Kê đơn thuốc -->
+        <div class="card" id="doctor-exam-panel">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <span id="exam-patient-title">Hồ Sơ Khám Bệnh Điện Tử (EMR)</span>
+              </div>
+              <span style="font-size: 0.8rem; color: var(--text-muted);" id="exam-patient-sub">
+                Chọn một bệnh nhân từ danh sách chờ bên trái để bắt đầu khám
+              </span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="badge badge-waiting" id="exam-status-badge">CHƯA CHỌN</span>
+              <button type="button" class="btn btn-primary btn-sm" id="btn-start-exam" style="display: none;">
+                🩺 Mời Vào Phòng & Khám
+              </button>
+            </div>
+          </div>
+
+          <form id="form-medical-record" style="display: none;">
+            <input type="hidden" id="exam-appointment-id">
+
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Huyết áp (mmHg)</label>
+                <input type="text" class="form-control" id="exam-bp" placeholder="VD: 120/80" value="120/80">
+              </div>
+              <div class="form-group">
+                <label>Thân nhiệt (°C)</label>
+                <input type="number" step="0.1" class="form-control" id="exam-temp" placeholder="VD: 37.5" value="37.5">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Chẩn đoán bệnh lý *</label>
+              <textarea class="form-control" id="exam-diagnosis" rows="2" placeholder="Nhập kết luận chẩn đoán bệnh..." required></textarea>
+            </div>
+
+            <div class="form-group">
+              <label>Lời dặn & Hướng dẫn điều trị</label>
+              <textarea class="form-control" id="exam-advice" rows="2" placeholder="Dặn dò chế độ dinh dưỡng, nghỉ ngơi..."></textarea>
+            </div>
+
+            <!-- Chỉ định dịch vụ cận lâm sàng -->
+            <div class="form-group" style="background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid var(--border);">
+              <label style="color: var(--primary-dark); font-weight: 700;">🔬 Chỉ định Cận lâm sàng (Xét nghiệm / Hình ảnh):</label>
+              <div id="cls-services-checkboxes" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+                <!-- Render động -->
+              </div>
+            </div>
+
+            <!-- Tải lên hình ảnh Cận lâm sàng / X-quang (Phục vụ trực tiếp qua Nginx Static Volume) -->
+            <div class="form-group" style="background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid var(--border);">
+              <label style="color: var(--primary-dark); font-weight: 700;">📸 Tải lên ảnh X-quang / Siêu âm (Nginx Static Volume):</label>
+              <div style="display: flex; align-items: center; gap: 12px; margin-top: 8px;">
+                <input type="file" id="exam-xray-file" accept="image/*" class="form-control" style="font-size: 0.85rem;">
+                <span id="xray-upload-status" style="font-size: 0.8rem; color: var(--text-muted); white-space: nowrap;"></span>
+              </div>
+              <input type="hidden" id="exam-image-url">
+              <div id="xray-preview-container" style="margin-top: 10px; display: none;">
+                <img id="xray-preview-img" src="" alt="Ảnh X-quang" style="max-height: 120px; border-radius: 6px; border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
+              </div>
+            </div>
+
+            <!-- Kê đơn thuốc -->
+            <div class="form-group" style="background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid var(--border);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="color: var(--primary-dark); font-weight: 700; margin-bottom: 0;">💊 Kê đơn thuốc điện tử:</label>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-add-prescription-row">➕ Thêm thuốc</button>
+              </div>
+              <div id="prescription-container" style="display: flex; flex-direction: column; gap: 8px;">
+                <!-- Dòng kê thuốc -->
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+              <button type="button" class="btn btn-secondary" id="btn-cancel-exam">Hủy bỏ</button>
+              <button type="submit" class="btn btn-success" id="btn-submit-exam">
+                💾 Hoàn Tất Khám & Xuất Viện Phí
+              </button>
+            </div>
+          </form>
+
+          <div id="exam-empty-state" style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+            <div style="font-size: 3rem; margin-bottom: 12px;">🩺</div>
+            <h4>Vui lòng chọn một bệnh nhân từ hàng đợi bên trái</h4>
+            <p style="font-size: 0.85rem;">Bác sĩ có thể nhập chẩn đoán, tích chọn xét nghiệm và kê đơn thuốc tự động</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- TAB 3: THU NGÂN & THANH TOÁN VIỆN PHÍ (CASHIER)          -->
+    <!-- ======================================================== -->
+    <div id="tab-cashier" class="tab-pane" style="display: none;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>💳 Quản Lý Thu Viện Phí & Xuất Hóa Đơn Khám</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-refresh-invoices">🔄 Làm mới</button>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Mã HĐ</th>
+                <th>STT Khám</th>
+                <th>Bệnh Nhân</th>
+                <th>Bác Sĩ</th>
+                <th>Tổng Tiền</th>
+                <th>Hình Thức</th>
+                <th>Trạng Thái</th>
+                <th style="text-align: right;">Thanh Toán & In</th>
+              </tr>
+            </thead>
+            <tbody id="invoices-tbody">
+              <!-- Render động -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- TAB 4: QUẢN TRỊ & GIÁM SÁT HẠ TẦNG (ADMIN & DEVOPS)    -->
+    <!-- ĐÂY LÀ PHẦN TRỌNG TÂM CỦA MÔN THI VẤN ĐÁP                -->
+    <!-- ======================================================== -->
+    <div id="tab-admin" class="tab-pane" style="display: none;">
+      
+      <!-- Sơ đồ kiến trúc Multi-tier -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>🏗️ Kiến Trúc Hệ Thống Đa Tầng (Multi-tier Containerized Architecture)</span>
+          </div>
+          <span class="badge badge-in_progress">DOCKER COMPOSE</span>
+        </div>
+        
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 16px;">
+          Hệ thống được cô lập làm 3 mạng riêng biệt: <strong>frontend_net</strong> (công khai qua Nginx Reverse Proxy), <strong>backend_net</strong> (bảo vệ Database & Cache nội bộ), và <strong>monitor_net</strong> (thu thập số liệu Prometheus & Grafana).
+        </p>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
+          <div class="server-link-card">
+            <div>
+              <strong style="color: var(--dark);">1. Nginx Reverse Proxy</strong>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">Port 80 / 443 | Rate Limiting: 10r/s</div>
+            </div>
+            <span class="badge badge-completed">ĐANG CHẠY</span>
+          </div>
+
+          <div class="server-link-card">
+            <div>
+              <strong style="color: var(--dark);">2. Backend API Service</strong>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">Node.js Express | Port 8000 nội bộ</div>
+            </div>
+            <a href="/api/health" target="_blank" class="btn btn-secondary btn-sm">/health</a>
+          </div>
+
+          <div class="server-link-card">
+            <div>
+              <strong style="color: var(--dark);">3. PostgreSQL 15 & Volume</strong>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">Port 5432 nội bộ | Volume: pgdata</div>
+            </div>
+            <span class="badge badge-waiting">BẢO MẬT NỘI BỘ</span>
+          </div>
+
+          <div class="server-link-card">
+            <div>
+              <strong style="color: var(--dark);">4. Giám Sát Grafana</strong>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">Dashboard: HMS Overview | Cổng 3000</div>
+            </div>
+            <a href="http://localhost:3000/d/clinic-overview/giam-sat-he-thong-phong-kham-hms-overview" target="_blank" class="btn btn-primary btn-sm">Mở Grafana ↗</a>
+          </div>
+
+          <div class="server-link-card">
+            <div>
+              <strong style="color: var(--dark);">5. Prometheus Metrics</strong>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">Scrape: Node Exporter + App API | Cổng 9090</div>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <a href="http://localhost:9090" target="_blank" class="btn btn-primary btn-sm">Prometheus ↗</a>
+              <a href="/api/metrics" target="_blank" class="btn btn-secondary btn-sm">/metrics</a>
+            </div>
+          </div>
+
+          <div class="server-link-card">
+            <div>
+              <strong style="color: var(--dark);">6. Redis Queue & Cache</strong>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">Redis 7 Alpine | Cấp số thứ tự & Cache</div>
+            </div>
+            <span class="badge badge-completed">ACTIVE</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Kịch bản thi vấn đáp 1: Thử nghiệm tải & Rate Limiting -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>⚡ Thử Nghiệm Bắn Tải & Cơ Chế Rate Limiting (Nginx 503 Service Unavailable)</span>
+          </div>
+          <button class="btn btn-danger btn-sm" id="btn-stress-test">
+            🚀 Bắn tải thử nghiệm ngay (50 requests/giây)
+          </button>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">
+          Thầy cô thường yêu cầu chứng minh cơ chế bảo vệ máy chủ bằng công cụ <code>apache2-utils (ab)</code>. Nginx được cấu hình <code>limit_req zone=api_limit burst=20 nodelay</code> để chặn Brute-force và DoS.
+        </p>
+        <div class="terminal-box">
+          <div class="terminal-header">
+            <span class="terminal-dot red"></span>
+            <span class="terminal-dot yellow"></span>
+            <span class="terminal-dot green"></span>
+            <span class="terminal-title">bash - stress-test@nginx-proxy</span>
+          </div>
+          <div class="terminal-content">
+            <div class="terminal-line"><span class="terminal-prompt">ubuntu@server:~$</span> <span class="terminal-cmd">ab -n 1000 -c 50 http://localhost/api/health</span></div>
+            <div class="terminal-line" style="color: #64748b;"># Kết quả: Nginx ngay lập tức bảo vệ backend, các request vượt ngưỡng nhận mã HTTP 503</div>
+            <div class="terminal-line" id="stress-result-text" style="color: #38bdf8;">Sẵn sàng chạy thử nghiệm...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Kịch bản thi vấn đáp 2: Diễn tập Phục hồi Thảm họa (Disaster Recovery) -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>🛡️ Kịch Bản Diễn Tập Phục Hồi Dữ Liệu Thảm Họa (Disaster Recovery)</span>
+          </div>
+          <span class="badge badge-exam">HỘI ĐỒNG THƯỜNG HỎI</span>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">
+          Kịch bản từng bước minh họa khi sự cố xóa nhầm bảng dữ liệu hoặc hỏng máy chủ, quản trị viên khôi phục dữ liệu bằng backup nén <code>.sql.gz</code> hoặc <code>.sql</code>:
+        </p>
+
+        <div class="terminal-box">
+          <div class="terminal-header">
+            <span class="terminal-dot red"></span>
+            <span class="terminal-dot yellow"></span>
+            <span class="terminal-dot green"></span>
+            <span class="terminal-title">bash - postgres-disaster-recovery</span>
+          </div>
+          <div class="terminal-content">
+            <div class="terminal-line"><span style="color: #e2e8f0; font-weight: bold;"># BƯỚC 1: Sao lưu thủ công hoặc tự động qua Cronjob</span></div>
+            <div class="terminal-line"><span class="terminal-prompt">admin@server:~$</span> <span class="terminal-cmd">./scripts/backup_db.sh</span> (hoặc PowerShell: <code>.\scripts\backup_db.ps1</code>)</div>
+            
+            <div class="terminal-line" style="margin-top: 10px;"><span style="color: #ef4444; font-weight: bold;"># BƯỚC 2: Giả lập sự cố mất mát dữ liệu (Xóa bảng bệnh nhân)</span></div>
+            <div class="terminal-line"><span class="terminal-prompt">admin@server:~$</span> <span class="terminal-cmd">docker exec -i clinic_db psql -U clinic_admin -d clinic_management -c "DROP TABLE patients CASCADE;"</span></div>
+
+            <div class="terminal-line" style="margin-top: 10px;"><span style="color: #22c55e; font-weight: bold;"># BƯỚC 3: Thực hiện lệnh khôi phục từ bản sao lưu</span></div>
+            <div class="terminal-line"><span class="terminal-prompt">admin@server:~$</span> <span class="terminal-cmd">./scripts/restore_db.sh</span> (hoặc PowerShell: <code>.\scripts\restore_db.ps1</code>)</div>
+
+            <div class="terminal-line" style="margin-top: 10px;"><span style="color: #38bdf8; font-weight: bold;"># BƯỚC 4: Kiểm tra lại toàn vẹn dữ liệu</span></div>
+            <div class="terminal-line"><span class="terminal-prompt">admin@server:~$</span> <span class="terminal-cmd">docker exec -i clinic_db psql -U clinic_admin -d clinic_management -c "SELECT count(*) FROM patients;"</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: TIẾP NHẬN & CẤP SỐ THỨ TỰ                         -->
+  <!-- ======================================================== -->
+  <div class="modal-overlay" id="modal-patient">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--dark);">➕ Tiếp Nhận Bệnh Nhân & Cấp Số Khám</h3>
+        <button class="modal-close" id="btn-close-modal">&times;</button>
+      </div>
+
+      <form id="form-new-patient">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Họ và Tên Bệnh Nhân *</label>
+            <input type="text" class="form-control" id="p-name" placeholder="VD: Nguyễn Văn Bình" required>
+          </div>
+          <div class="form-group">
+            <label>Số Điện Thoại</label>
+            <input type="tel" class="form-control" id="p-phone" placeholder="VD: 0988123456">
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Số CCCD / CMND *</label>
+            <input type="text" class="form-control" id="p-idcard" placeholder="VD: 001201004567" required>
+          </div>
+          <div class="form-group">
+            <label>Ngày Sinh</label>
+            <input type="date" class="form-control" id="p-dob" value="1998-05-15">
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Giới Tính</label>
+            <select class="form-control" id="p-gender">
+              <option value="Nam">Nam</option>
+              <option value="Nữ">Nữ</option>
+              <option value="Khác">Khác</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Bác Sĩ Khám *</label>
+            <select class="form-control" id="p-doctor-select" required>
+              <!-- Danh sách bác sĩ -->
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Địa Chỉ Thường Trú</label>
+          <input type="text" class="form-control" id="p-address" placeholder="VD: Ba Đình, Hà Nội">
+        </div>
+
+        <div class="form-group">
+          <label>Triệu Chứng / Lý Do Đến Khám</label>
+          <textarea class="form-control" id="p-symptoms" rows="2" placeholder="VD: Sốt cao, đau họng kéo dài 2 ngày..."></textarea>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-modal">Hủy</button>
+          <button type="submit" class="btn btn-primary">
+            🎫 Cấp Số Thứ Tự Ngay
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
