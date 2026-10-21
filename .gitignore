@@ -5,9 +5,12 @@
 
 # 2. Database backups & Uploads (Volume Data)
 backups/
-*.sql
+backups/*.sql
 backend/uploads/
 uploads/
+
+# Giữ lại file khởi tạo cơ sở dữ liệu mẫu
+!db/init.sql
 
 # 3. Node.js & Dependencies
 node_modules/
