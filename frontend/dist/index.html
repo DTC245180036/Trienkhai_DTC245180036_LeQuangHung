@@ -8,11 +8,10 @@
 </head>
 <body>
 
-  <!-- 1. THANH CHUYỂN ĐỔI VAI TRÒ DÀNH CHO BUỔI THI VẤN ĐÁP (DEMO CONTROLLER) -->
-  <aside class="demo-bar" aria-label="Thanh điều khiển nhanh kịch bản bảo vệ môn học">
+  <!-- 1. THANH ĐIỀU PHỐI VÀ CHUYỂN ĐỔI PHÂN HỆ (RBAC) -->
+  <aside class="demo-bar" aria-label="Thanh điều phối phân hệ vai trò y tế">
     <div class="demo-title">
-      <span class="badge-exam">BẢO VỆ MÔN HỌC</span>
-      <span>HỆ THỐNG QUẢN LÝ PHÒNG KHÁM (HMS)</span>
+      <span>🏥 HỆ THỐNG QUẢN LÝ PHÒNG KHÁM (HMS)</span>
     </div>
 
     <nav class="role-switcher" aria-label="Chuyển đổi vai trò">
@@ -376,7 +375,7 @@
         </div>
       </div>
 
-      <!-- Kịch bản thi vấn đáp 1: Thử nghiệm tải & Rate Limiting -->
+      <!-- Kịch bản 1: Thử nghiệm tải & Rate Limiting -->
       <div class="card">
         <div class="card-header">
           <div class="card-title">
@@ -387,7 +386,7 @@
           </button>
         </div>
         <p style="font-size: 0.85rem; color: var(--text-muted);">
-          Thầy cô thường yêu cầu chứng minh cơ chế bảo vệ máy chủ bằng công cụ <code>apache2-utils (ab)</code>. Nginx được cấu hình <code>limit_req zone=api_limit burst=20 nodelay</code> để chặn Brute-force và DoS.
+          Kiểm thử khả năng chịu tải và cơ chế bảo vệ máy chủ bằng công cụ kiểm thử hiệu năng. Nginx được cấu hình <code>limit_req zone=api_limit burst=20 nodelay</code> để chặn Brute-force và tấn công DoS.
         </p>
         <div class="terminal-box">
           <div class="terminal-header">
@@ -397,23 +396,23 @@
             <span class="terminal-title">bash - stress-test@nginx-proxy</span>
           </div>
           <div class="terminal-content">
-            <div class="terminal-line"><span class="terminal-prompt">ubuntu@server:~$</span> <span class="terminal-cmd">ab -n 1000 -c 50 http://localhost/api/health</span></div>
+            <div class="terminal-line"><span class="terminal-prompt">admin@clinic-host:~$</span> <span class="terminal-cmd">ab -n 1000 -c 50 http://localhost/api/health</span></div>
             <div class="terminal-line" style="color: #64748b;"># Kết quả: Nginx ngay lập tức bảo vệ backend, các request vượt ngưỡng nhận mã HTTP 503</div>
             <div class="terminal-line" id="stress-result-text" style="color: #38bdf8;">Sẵn sàng chạy thử nghiệm...</div>
           </div>
         </div>
       </div>
 
-      <!-- Kịch bản thi vấn đáp 2: Diễn tập Phục hồi Thảm họa (Disaster Recovery) -->
+      <!-- Kịch bản 2: Diễn tập Phục hồi Thảm họa (Disaster Recovery) -->
       <div class="card">
         <div class="card-header">
           <div class="card-title">
-            <span>🛡️ Kịch Bản Diễn Tập Phục Hồi Dữ Liệu Thảm Họa (Disaster Recovery)</span>
+            <span>🛡️ Quy Trình Sao Lưu & Phục Hồi Dữ Liệu Khi Sự Cố (Disaster Recovery)</span>
           </div>
-          <span class="badge badge-exam">HỘI ĐỒNG THƯỜNG HỎI</span>
+          <span class="badge badge-waiting">BẢO VỆ DỮ LIỆU</span>
         </div>
         <p style="font-size: 0.85rem; color: var(--text-muted);">
-          Kịch bản từng bước minh họa khi sự cố xóa nhầm bảng dữ liệu hoặc hỏng máy chủ, quản trị viên khôi phục dữ liệu bằng backup nén <code>.sql.gz</code> hoặc <code>.sql</code>:
+          Quy trình từng bước xử lý khi sự cố mất dữ liệu hoặc hỏng máy chủ, quản trị viên khôi phục dữ liệu bằng bản sao lưu <code>.sql</code>:
         </p>
 
         <div class="terminal-box">
