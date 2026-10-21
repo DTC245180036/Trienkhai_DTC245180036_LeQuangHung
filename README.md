@@ -3,14 +3,16 @@
 
 * **Trường:** Đại học Công nghệ Thông tin và Truyền thông (ICTU) - Đại học Thái Nguyên
 * **Khoa:** Khoa Công nghệ Thông tin - Bộ môn Mạng & Quản trị Hệ thống
-* **Sinh viên thực hiện:** Lê Quang Hùng
+* **Sinh viên thực hiện:** Lê Quang Hưng
 * **Mã số sinh viên (MSSV):** DTC245180036
-* **Lớp:** CNTT K23
+* **Lớp:** KTPM K23B
 * **GitHub Repository:** [https://github.com/DTC245180036/Trienkhai_DTC245180036_LeQuangHung](https://github.com/DTC245180036/Trienkhai_DTC245180036_LeQuangHung)
 
 ---
 
 ## I. TỔNG QUAN KIẾN TRÚC HỆ THỐNG (DOCKER COMPOSE)
+
+![Sơ đồ kiến trúc đa tầng Docker Compose](so_do_kien_truc.png)
 
 Hệ thống được đóng gói và điều phối hoàn toàn qua **Docker Compose** bao gồm 8 container dịch vụ độc lập, chia làm 3 vùng mạng cách ly:
 

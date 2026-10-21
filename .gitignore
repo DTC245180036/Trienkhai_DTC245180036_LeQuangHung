@@ -22,6 +22,8 @@ yarn-error.log*
 *.docx
 generate_*.py
 HUONG_DAN_CHAY_VA_VAN_DAP.md
+__pycache__/
+*.pyc
 
 # 5. Operating Systems & Editors
 .DS_Store
