@@ -30,6 +30,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupModal();
   setupDoctorExamForm();
   setupStressTest();
+  setupReceptionFilters();
+  setupTicketModal();
 
   // Khởi tạo phân quyền ban đầu (RBAC Enforcement)
   applyRolePermissions(state.currentRole);
@@ -229,50 +231,142 @@ async function loadStats() {
 // ==========================================
 // 5. NGHIỆP VỤ TIẾP NHẬN BỆNH NHÂN (RECEPTION)
 // ==========================================
+function getInitials(name) {
+  if (!name) return 'BN';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function calcAge(dob) {
+  if (!dob) return '';
+  const birthYear = parseInt(String(dob).split('-')[0], 10);
+  if (!birthYear || isNaN(birthYear)) return '';
+  const currentYear = new Date().getFullYear();
+  return `(${currentYear - birthYear}t)`;
+}
+
 async function loadAppointments() {
-  const tbody = document.getElementById('appointment-tbody');
   try {
     const res = await fetch(`${API_BASE}/appointments`);
     if (!res.ok) throw new Error('Không thể tải lịch khám');
     state.appointments = await res.json();
+    renderReceptionTable();
+  } catch (err) {
+    const tbody = document.getElementById('appointment-tbody');
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--danger); padding: 20px;">Lỗi kết nối cơ sở dữ liệu: ${err.message}</td></tr>`;
+    }
+  }
+}
 
-    if (state.appointments.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">Hôm nay chưa có lượt tiếp nhận nào. Bấm 'Tiếp Nhận & Cấp Số Mới' để thêm.</td></tr>`;
-      return;
+function renderReceptionTable() {
+  const tbody = document.getElementById('appointment-tbody');
+  if (!tbody) return;
+
+  const search = (document.getElementById('reception-search-input')?.value || '').toLowerCase().trim();
+  const filterStatus = state.receptionFilterStatus || 'all';
+  const filterDoc = document.getElementById('reception-doctor-filter')?.value || 'all';
+
+  // Cập nhật số lượng đếm trên các chip lọc
+  const total = state.appointments.length;
+  const waiting = state.appointments.filter(a => a.status === 'WAITING').length;
+  const inProg = state.appointments.filter(a => a.status === 'IN_PROGRESS').length;
+  const comp = state.appointments.filter(a => a.status === 'COMPLETED').length;
+
+  if (document.getElementById('count-all')) document.getElementById('count-all').innerText = total;
+  if (document.getElementById('count-waiting')) document.getElementById('count-waiting').innerText = waiting;
+  if (document.getElementById('count-inprogress')) document.getElementById('count-inprogress').innerText = inProg;
+  if (document.getElementById('count-completed')) document.getElementById('count-completed').innerText = comp;
+
+  let filtered = state.appointments.filter(a => {
+    if (filterStatus !== 'all' && a.status !== filterStatus) return false;
+    if (filterDoc !== 'all' && String(a.doctor_id) !== filterDoc) return false;
+    if (search) {
+      const matchName = (a.patient_name || '').toLowerCase().includes(search);
+      const matchId = (a.identity_card || '').toLowerCase().includes(search);
+      const matchPhone = (a.patient_phone || '').toLowerCase().includes(search);
+      if (!matchName && !matchId && !matchPhone) return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">Không có lượt khám nào phù hợp với điều kiện tìm kiếm/lọc.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(a => {
+    let badgeClass = 'badge-waiting';
+    let statusText = 'Chờ khám';
+    if (a.status === 'IN_PROGRESS') { badgeClass = 'badge-in_progress'; statusText = 'Đang khám'; }
+    if (a.status === 'COMPLETED') { badgeClass = 'badge-completed'; statusText = 'Đã khám xong'; }
+    if (a.status === 'CANCELLED') { badgeClass = 'badge-cancelled'; statusText = 'Đã hủy'; }
+
+    let actionHtml = '';
+    if (a.status === 'WAITING') {
+      actionHtml = `
+        <button class="btn-ticket-print" onclick="openTicketModal(${a.id})" title="In phiếu bốc số">🎫 In Phiếu</button>
+        <button class="btn btn-secondary btn-sm" onclick="startExamFromReception(${a.id})">🩺 Gọi Khám</button>
+      `;
+    } else if (a.status === 'IN_PROGRESS') {
+      actionHtml = `
+        <button class="btn-ticket-print" onclick="openTicketModal(${a.id})" title="In phiếu bốc số">🎫 In Phiếu</button>
+        <button class="btn btn-primary btn-sm" onclick="startExamFromReception(${a.id})">🩺 Vào Khám</button>
+      `;
+    } else {
+      actionHtml = `
+        <button class="btn-ticket-print" onclick="openTicketModal(${a.id})" title="Xem lại phiếu bốc số">🎫 Phiếu</button>
+        <span style="font-size: 0.8rem; color: #16a34a; font-weight: 700;">✅ Hoàn tất</span>
+      `;
     }
 
-    tbody.innerHTML = state.appointments.map(a => {
-      let badgeClass = 'badge-waiting';
-      let statusText = 'Chờ khám';
-      if (a.status === 'IN_PROGRESS') { badgeClass = 'badge-in_progress'; statusText = 'Đang khám'; }
-      if (a.status === 'COMPLETED') { badgeClass = 'badge-completed'; statusText = 'Đã khám xong'; }
-      if (a.status === 'CANCELLED') { badgeClass = 'badge-cancelled'; statusText = 'Đã hủy'; }
+    const initials = getInitials(a.patient_name);
+    const ageStr = calcAge(a.dob);
 
-      let actionHtml = `<span style="font-size: 0.8rem; color: var(--text-muted);">Đã tiếp nhận</span>`;
-      if (a.status === 'WAITING') {
-        actionHtml = `<button class="btn btn-secondary btn-sm" onclick="startExamFromReception(${a.id})">🩺 Gọi Khám</button>`;
-      } else if (a.status === 'IN_PROGRESS') {
-        actionHtml = `<button class="btn btn-primary btn-sm" onclick="startExamFromReception(${a.id})">🩺 Vào Khám</button>`;
-      } else if (a.status === 'COMPLETED') {
-        actionHtml = `<span style="font-size: 0.8rem; color: #16a34a; font-weight: 600;">✅ Đã khám xong</span>`;
-      }
+    return `
+      <tr>
+        <td><strong style="color: var(--primary); font-size: 1.15rem; font-weight: 800;">#${String(a.queue_number).padStart(2, '0')}</strong></td>
+        <td>
+          <div class="patient-cell">
+            <div class="patient-avatar-mini">${initials}</div>
+            <div class="patient-info-text">
+              <strong>${a.patient_name}</strong>
+              <span class="patient-phone-tag">${a.gender || 'Nam'} • ${a.dob ? a.dob : '--'}</span>
+            </div>
+          </div>
+        </td>
+        <td><strong>${a.identity_card || '--'}</strong> <span class="age-pill">${ageStr}</span></td>
+        <td><span style="font-family: monospace; font-size: 0.85rem; font-weight: 600; color: #334155;">${a.patient_phone || '--'}</span></td>
+        <td>
+          <div style="font-weight: 700; color: var(--dark); font-size: 0.85rem;">${a.doctor_name || 'Bác sĩ phụ trách'}</div>
+          <span class="room-badge">${a.room_number || 'P.102'} - ${a.department_name || 'Khám bệnh'}</span>
+        </td>
+        <td><span style="font-size: 0.82rem; color: #475569;">${a.symptoms || 'Khám tổng quát'}</span></td>
+        <td><span class="badge ${badgeClass}">${statusText}</span></td>
+        <td style="text-align: right; white-space: nowrap;">${actionHtml}</td>
+      </tr>
+    `;
+  }).join('');
+}
 
-      return `
-        <tr>
-          <td><strong style="color: var(--primary); font-size: 1.1rem;">#${String(a.queue_number).padStart(2, '0')}</strong></td>
-          <td><strong>${a.patient_name}</strong></td>
-          <td>${a.identity_card || '--'} (${a.dob ? a.dob.split('-')[0] : '--'})</td>
-          <td>${a.patient_phone || '--'}</td>
-          <td>${a.doctor_name || 'Bác sĩ phụ trách'} <span style="font-size: 0.75rem; color: var(--text-muted);">(${a.room_number || 'P.102'})</span></td>
-          <td><span style="font-size: 0.85rem; color: #475569;">${a.symptoms || 'Khám tổng quát'}</span></td>
-          <td><span class="badge ${badgeClass}">${statusText}</span></td>
-          <td style="text-align: right;">${actionHtml}</td>
-        </tr>
-      `;
-    }).join('');
-  } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--danger); padding: 20px;">Lỗi kết nối cơ sở dữ liệu: ${err.message}</td></tr>`;
-  }
+function renderDoctorDutyCards() {
+  const container = document.getElementById('doctor-duty-container');
+  if (!container || !state.doctors || state.doctors.length === 0) return;
+
+  const icons = ['🩺', '👂', '🦷', '🔬'];
+  container.innerHTML = state.doctors.map((d, idx) => `
+    <div class="doctor-duty-card">
+      <div class="doc-duty-avatar">${icons[idx % icons.length]}</div>
+      <div class="doc-duty-info">
+        <h4>${d.full_name}</h4>
+        <p>${d.department_name} • Phòng <strong>${d.room_number}</strong></p>
+        <div class="doc-duty-status">
+          <span class="live-pulse-dot" style="width: 6px; height: 6px;"></span> Đang trực khám
+        </div>
+      </div>
+    </div>
+  `).join('');
 }
 
 function populateDoctorDropdown() {
@@ -281,6 +375,16 @@ function populateDoctorDropdown() {
     select.innerHTML = state.doctors.map(d => `
       <option value="${d.id}">${d.full_name} - ${d.department_name} (${d.room_number})</option>
     `).join('');
+  }
+
+  const receptionFilter = document.getElementById('reception-doctor-filter');
+  if (receptionFilter) {
+    const curVal = receptionFilter.value || 'all';
+    receptionFilter.innerHTML = `<option value="all">🏥 Tất cả phòng khám</option>` + state.doctors.map(d => `
+      <option value="${d.id}">${d.full_name} (${d.room_number} - ${d.department_name})</option>
+    `).join('');
+    receptionFilter.value = curVal;
+    receptionFilter.onchange = renderReceptionTable;
   }
 
   const filterSelect = document.getElementById('doctor-filter-select');
@@ -292,6 +396,89 @@ function populateDoctorDropdown() {
     filterSelect.value = curVal;
     filterSelect.onchange = loadDoctorQueue;
   }
+
+  renderDoctorDutyCards();
+}
+
+function setupReceptionFilters() {
+  state.receptionFilterStatus = 'all';
+
+  const searchInput = document.getElementById('reception-search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      renderReceptionTable();
+    });
+  }
+
+  const chips = document.querySelectorAll('.filter-chip');
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      state.receptionFilterStatus = chip.dataset.filter || 'all';
+      renderReceptionTable();
+    });
+  });
+
+  // Phím tắt F2: Mở nhanh modal tiếp nhận bệnh nhân
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'F2') {
+      e.preventDefault();
+      const btn = document.getElementById('btn-open-new-patient');
+      if (btn) btn.click();
+    }
+  });
+}
+
+function setupTicketModal() {
+  const modal = document.getElementById('modal-ticket');
+  const btnClose = document.getElementById('btn-close-ticket');
+  const btnPrint = document.getElementById('btn-print-action');
+
+  if (btnClose && modal) {
+    btnClose.addEventListener('click', () => modal.classList.remove('open'));
+  }
+
+  if (btnPrint && modal) {
+    btnPrint.addEventListener('click', () => {
+      showToast('Đang kết nối máy in nhiệt: In phiếu số khám thành công!', 'success');
+      setTimeout(() => {
+        modal.classList.remove('open');
+      }, 1200);
+    });
+  }
+
+  window.openTicketModal = (appointmentId) => {
+    const app = state.appointments.find(a => a.id === appointmentId);
+    if (!app) return;
+
+    if (document.getElementById('ticket-queue-num')) {
+      document.getElementById('ticket-queue-num').innerText = '#' + String(app.queue_number).padStart(2, '0');
+    }
+    if (document.getElementById('ticket-patient-name')) {
+      document.getElementById('ticket-patient-name').innerText = app.patient_name || '--';
+    }
+    if (document.getElementById('ticket-patient-idcard')) {
+      document.getElementById('ticket-patient-idcard').innerText = app.identity_card || 'Chưa cập nhật';
+    }
+    if (document.getElementById('ticket-patient-phone')) {
+      document.getElementById('ticket-patient-phone').innerText = app.patient_phone || 'Chưa cập nhật';
+    }
+    if (document.getElementById('ticket-doctor-room')) {
+      document.getElementById('ticket-doctor-room').innerText = app.room_number ? `${app.room_number} (${app.department_name || ''})` : 'P.102';
+    }
+    if (document.getElementById('ticket-doctor-name')) {
+      document.getElementById('ticket-doctor-name').innerText = app.doctor_name || 'BS CK1. Trần Văn Nam';
+    }
+
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} - ${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth()+1).padStart(2, '0')}/${now.getFullYear()}`;
+    if (document.getElementById('ticket-time')) {
+      document.getElementById('ticket-time').innerText = timeStr;
+    }
+
+    if (modal) modal.classList.add('open');
+  };
 }
 
 function setupModal() {

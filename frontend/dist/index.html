@@ -46,8 +46,12 @@
         </svg>
       </div>
       <div class="logo-text">
-        <h1>MEDICARE CLINIC PRO</h1>
-        <span>Hệ thống Quản lý Khám chữa bệnh & Triển khai Đa Tầng</span>
+        <h1>BỆNH VIỆN ĐA KHOA ICTU</h1>
+        <span>HỆ THỐNG Y TẾ SỐ & BỆNH ÁN ĐIỆN TỬ (EMR)</span>
+      </div>
+      <div class="hospital-shift-tag">
+        <span class="live-pulse-dot"></span>
+        <span>CA TRỰC HÔM NAY • 4 PHÒNG KHÁM SẴN SÀNG</span>
       </div>
     </div>
 
@@ -85,6 +89,9 @@
         <div class="stat-details">
           <h3 id="stat-patients">--</h3>
           <p>Tổng Hồ sơ Bệnh nhân</p>
+          <div class="stat-sub-info">
+            <span class="badge-mini badge-mini-blue">Đồng bộ CSDL 100%</span>
+          </div>
         </div>
       </div>
       <div class="stat-card">
@@ -92,6 +99,9 @@
         <div class="stat-details">
           <h3 id="stat-waiting">--</h3>
           <p>Đang Chờ Khám Hôm Nay</p>
+          <div class="stat-sub-info">
+            <span class="badge-mini badge-mini-amber">Cấp số tự động (Redis)</span>
+          </div>
         </div>
       </div>
       <div class="stat-card">
@@ -99,6 +109,9 @@
         <div class="stat-details">
           <h3 id="stat-completed">--</h3>
           <p>Lượt Đã Khám Xong</p>
+          <div class="stat-sub-info">
+            <span class="badge-mini badge-mini-purple">Lưu trữ EMR & CLS</span>
+          </div>
         </div>
       </div>
       <div class="stat-card">
@@ -106,6 +119,9 @@
         <div class="stat-details">
           <h3 id="stat-revenue">-- đ</h3>
           <p>Doanh Thu Đã Thu</p>
+          <div class="stat-sub-info">
+            <span class="badge-mini badge-mini-green">Hóa đơn & QR Pay</span>
+          </div>
         </div>
       </div>
     </section>
@@ -117,12 +133,31 @@
       <div class="card">
         <div class="card-header">
           <div class="card-title">
-            <span>📋 Tiếp Nhận Bệnh Nhân & Hàng Đợi Khám Trong Ngày</span>
+            <span>📋 Quản Lý Tiếp Nhận & Hàng Đợi Bệnh Nhân Trong Ngày</span>
           </div>
-          <div>
+          <div style="display: flex; gap: 10px; align-items: center;">
             <button class="btn btn-primary" id="btn-open-new-patient">
-              ➕ Tiếp Nhận & Cấp Số Mới
+              ➕ Tiếp Nhận & Cấp Số Mới (F2)
             </button>
+          </div>
+        </div>
+
+        <!-- THANH CÔNG CỤ TÌM KIẾM & BỘ LỌC HÀNG ĐỢI -->
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="reception-search-input" placeholder="Tìm kiếm theo Tên bệnh nhân, Số CCCD, Điện thoại..." class="search-input">
+          </div>
+          <div class="filter-chips">
+            <button class="filter-chip active" data-filter="all" id="btn-filter-all">Tất Cả (<span id="count-all">0</span>)</button>
+            <button class="filter-chip" data-filter="WAITING" id="btn-filter-waiting">⏳ Chờ Khám (<span id="count-waiting">0</span>)</button>
+            <button class="filter-chip" data-filter="IN_PROGRESS" id="btn-filter-inprogress">🩺 Đang Khám (<span id="count-inprogress">0</span>)</button>
+            <button class="filter-chip" data-filter="COMPLETED" id="btn-filter-completed">✅ Đã Xong (<span id="count-completed">0</span>)</button>
+          </div>
+          <div class="doctor-filter-wrapper">
+            <select id="reception-doctor-filter" class="form-control-sm">
+              <option value="all">🏥 Tất cả phòng khám</option>
+            </select>
           </div>
         </div>
 
@@ -137,7 +172,7 @@
                 <th>Bác Sĩ Tiếp Nhận</th>
                 <th>Triệu Chứng</th>
                 <th>Trạng Thái</th>
-                <th style="text-align: right;">Thao Tác</th>
+                <th style="text-align: right; min-width: 170px;">Thao Tác</th>
               </tr>
             </thead>
             <tbody id="appointment-tbody">
@@ -148,6 +183,19 @@
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- KHỐI ĐỘI NGŨ BÁC SĨ ĐANG TRỰC PHÒNG KHÁM -->
+      <div class="card" style="margin-top: 24px;">
+        <div class="card-header">
+          <div class="card-title">
+            <span>👨‍⚕️ Đội Ngũ Bác Sĩ Đang Trực Khám Tại Các Chuyên Khoa</span>
+          </div>
+          <span class="badge badge-completed">🟢 4 BÁC SĨ SẴN SÀNG</span>
+        </div>
+        <div class="doctor-duty-grid" id="doctor-duty-container">
+          <!-- Rendered dynamically via app.js -->
         </div>
       </div>
     </div>
@@ -509,6 +557,52 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: IN PHIẾU KHÁM BỆNH ĐIỆN TỬ (PRINT TICKET)         -->
+  <!-- ======================================================== -->
+  <div class="modal-overlay" id="modal-ticket">
+    <div class="modal-box modal-ticket-box">
+      <div class="ticket-header">
+        <div class="ticket-brand">🏥 BỆNH VIỆN ĐA KHOA ICTU</div>
+        <div class="ticket-sub">Khoa Khám Bệnh - Tiếp Nhận & Điều Phối</div>
+        <div class="ticket-line">--------------------------------------------</div>
+      </div>
+      <div class="ticket-body">
+        <div class="ticket-title">PHIẾU ĐĂNG KÝ KHÁM BỆNH</div>
+        <div class="ticket-queue-label">SỐ THỨ TỰ CỦA BẠN</div>
+        <div class="ticket-number" id="ticket-queue-num">#01</div>
+        
+        <div class="ticket-info-grid">
+          <div><span class="t-label">Bệnh nhân:</span> <strong id="ticket-patient-name">--</strong></div>
+          <div><span class="t-label">Số CCCD:</span> <span id="ticket-patient-idcard">--</span></div>
+          <div><span class="t-label">Điện thoại:</span> <span id="ticket-patient-phone">--</span></div>
+          <div><span class="t-label">Phòng khám:</span> <span id="ticket-doctor-room" class="ticket-highlight">P.102</span></div>
+          <div><span class="t-label">Bác sĩ phụ trách:</span> <strong id="ticket-doctor-name">--</strong></div>
+          <div><span class="t-label">Thời gian cấp:</span> <span id="ticket-time">--</span></div>
+        </div>
+
+        <div class="ticket-qr-area">
+          <div class="ticket-qr-box">
+            <svg width="76" height="76" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="1.8">
+              <rect x="2" y="2" width="7" height="7" rx="1"/>
+              <rect x="15" y="2" width="7" height="7" rx="1"/>
+              <rect x="2" y="15" width="7" height="7" rx="1"/>
+              <rect x="4.5" y="4.5" width="2" height="2" fill="#0f172a"/>
+              <rect x="17.5" y="4.5" width="2" height="2" fill="#0f172a"/>
+              <rect x="4.5" y="17.5" width="2" height="2" fill="#0f172a"/>
+              <path d="M14 14h2v2h-2zM18 14h4v2h-4zM14 18h4v4h-4zM20 20h2v2h-2z"/>
+            </svg>
+          </div>
+          <div class="ticket-note">💡 Quý khách vui lòng chú ý loa gọi số và màn hình hiển thị tại sảnh chờ phòng khám!</div>
+        </div>
+      </div>
+      <div class="ticket-footer">
+        <button class="btn btn-secondary" id="btn-close-ticket">Đóng</button>
+        <button class="btn btn-primary" id="btn-print-action">🖨️ In Phiếu (In Nhiệt)</button>
+      </div>
     </div>
   </div>
 
