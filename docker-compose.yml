@@ -43,6 +43,8 @@ services:
       - REDIS_HOST=clinic_redis
       - REDIS_PORT=6379
       - PORT=8000
+    ports:
+      - "8000:8000"
     volumes:
       - ./backend/server.js:/app/server.js
       - clinic_static:/app/uploads
@@ -96,6 +98,8 @@ services:
       - '--path.procfs=/host/proc'
       - '--path.rootfs=/rootfs'
       - '--path.sysfs=/host/sys'
+    ports:
+      - "9100:9100"
     networks:
       - monitor_net
 
