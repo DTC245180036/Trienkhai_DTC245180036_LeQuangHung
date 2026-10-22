@@ -432,11 +432,13 @@ function renderReceptionTable() {
 
     let actionHtml = '';
     if (a.status === 'WAITING') {
-      actionHtml = `<button class="btn btn-secondary btn-sm" onclick="startExamFromReception(${a.id})">🩺 Bắt Đầu Khám</button>`;
+      actionHtml = `<button class="btn btn-secondary btn-sm" onclick="printQueueTicket(${a.id})" title="In phiếu số thứ tự cho bệnh nhân">🖨️ In Phiếu Số</button>`;
     } else if (a.status === 'IN_PROGRESS') {
-      actionHtml = `<button class="btn btn-primary btn-sm" onclick="startExamFromReception(${a.id})">🩺 Tiếp Tục Khám</button>`;
+      actionHtml = `<span style="font-size: 0.85rem; color: #0284c7; font-weight: 700;">🩺 BS đang khám</span>`;
+    } else if (a.status === 'COMPLETED') {
+      actionHtml = `<span style="font-size: 0.85rem; color: #16a34a; font-weight: 700;">✅ Đã khám xong</span>`;
     } else {
-      actionHtml = `<span style="font-size: 0.85rem; color: #16a34a; font-weight: 700;">✅ Hoàn tất</span>`;
+      actionHtml = `<span style="font-size: 0.85rem; color: #dc2626; font-weight: 700;">Đã hủy</span>`;
     }
 
     return `
@@ -633,23 +635,99 @@ function setupModal() {
   });
 }
 
-window.startExamFromReception = async (appointmentId) => {
-  try {
-    await fetch(`${API_BASE}/appointments/${appointmentId}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'IN_PROGRESS' })
-    });
-  } catch (e) {}
-
-  showToast('Đã mời bệnh nhân vào phòng khám!', 'info');
-  const btnDoc = document.getElementById('btn-role-doctor');
-  if (btnDoc) {
-    btnDoc.click();
-  } else {
-    applyRolePermissions('DOCTOR');
+window.printQueueTicket = (appointmentId) => {
+  const app = (state.appointments || []).find(a => a.id == appointmentId);
+  if (!app) {
+    showToast('Không tìm thấy thông tin ca khám!', 'error');
+    return;
   }
-  await selectDoctorPatient(appointmentId);
+
+  const now = new Date();
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const dateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
+
+  const printWindow = window.open('', '_blank', 'width=380,height=520');
+  if (!printWindow) return;
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+      <meta charset="utf-8">
+      <title>Phiếu Khám Bệnh - STT #${app.queue_number}</title>
+      <style>
+        body {
+          font-family: 'Courier New', monospace;
+          padding: 16px;
+          margin: 0;
+          color: #000;
+          font-size: 13px;
+          line-height: 1.4;
+        }
+        .center { text-align: center; }
+        .dashed { border-top: 1px dashed #000; margin: 10px 0; }
+        .queue-box {
+          font-size: 42px;
+          font-weight: 900;
+          letter-spacing: 2px;
+          margin: 6px 0;
+        }
+        .row {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 4px;
+        }
+        @media print {
+          .no-print { display: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="no-print" style="margin-bottom: 12px; text-align: right;">
+        <button onclick="window.print()" style="padding: 6px 14px; font-weight: bold; background: #0d9488; color: #fff; border: none; border-radius: 4px; cursor: pointer;">🖨️ In Phiếu Này</button>
+      </div>
+
+      <div class="center">
+        <strong style="font-size: 14px;">BỆNH VIỆN ĐA KHOA ICTU</strong><br>
+        <span style="font-size: 11px;">HỆ THỐNG TIẾP NHẬN BỆNH NHÂN TỰ ĐỘNG</span>
+        <div class="dashed"></div>
+        <div style="font-size: 12px; font-weight: bold;">PHIẾU ĐĂNG KÝ KHÁM BỆNH</div>
+        <div class="queue-box">#${String(app.queue_number).padStart(2, '0')}</div>
+        <div style="font-size: 11px;">Giờ tiếp nhận: ${timeStr} - Ngày: ${dateStr}</div>
+      </div>
+
+      <div class="dashed"></div>
+
+      <div class="row"><span>Họ tên BN:</span><strong>${app.patient_name || '--'}</strong></div>
+      <div class="row"><span>CCCD/CMND:</span><span>${app.identity_card || '--'}</span></div>
+      <div class="row"><span>Điện thoại:</span><span>${app.patient_phone || '--'}</span></div>
+      <div class="dashed"></div>
+      <div class="row"><span>Phòng khám:</span><strong>${app.room_number || 'P.102'}</strong></div>
+      <div class="row"><span>Chuyên khoa:</span><strong>${app.department_name || 'Khám bệnh'}</strong></div>
+      <div class="row"><span>Bác sĩ phụ trách:</span><span>${app.doctor_name || 'BS Phụ trách'}</span></div>
+      <div class="row"><span>Lý do khám:</span><span>${app.symptoms || 'Khám tổng quát'}</span></div>
+
+      <div class="dashed"></div>
+
+      <div class="center" style="font-size: 11px; font-style: italic; margin-top: 8px;">
+        * Quý khách vui lòng ngồi tại sảnh chờ trước <strong>${app.room_number || 'phòng khám'}</strong>.<br>
+        Bác sĩ sẽ gọi theo số thứ tự hiển thị trên màn hình.
+      </div>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+};
+
+window.startExamFromReception = (appointmentId) => {
+  if (state.currentRole === 'RECEPTIONIST') {
+    showToast('Lễ tân không có quyền khám bệnh! Bác sĩ phụ trách sẽ gọi bệnh nhân vào phòng.', 'warning');
+    return;
+  }
+  if (state.currentRole === 'DOCTOR' || state.currentRole === 'ADMIN') {
+    switchTab('tab-doctor');
+    selectDoctorPatient(appointmentId);
+  }
 };
 
 // ==========================================
