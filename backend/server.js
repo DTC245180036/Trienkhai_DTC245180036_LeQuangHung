@@ -227,14 +227,28 @@ app.get('/stats', async (req, res) => {
     const todayAppointments = await pool.query('SELECT count(*) FROM appointments WHERE appointment_date = CURRENT_DATE');
     const waitingQueue = await pool.query("SELECT count(*) FROM appointments WHERE status = 'WAITING'");
     const completedQueue = await pool.query("SELECT count(*) FROM appointments WHERE status = 'COMPLETED'");
-    const revenue = await pool.query("SELECT COALESCE(SUM(total_amount), 0) as total FROM invoices WHERE payment_status = 'PAID'");
+    
+    // Doanh thu thu được trong ngày hôm nay
+    const todayRevenue = await pool.query(`
+      SELECT COALESCE(SUM(total_amount), 0) as total 
+      FROM invoices 
+      WHERE payment_status = 'PAID' AND DATE(created_at) = CURRENT_DATE
+    `);
+
+    // Tổng doanh thu thực thu tích lũy toàn hệ thống
+    const totalRevenue = await pool.query(`
+      SELECT COALESCE(SUM(total_amount), 0) as total 
+      FROM invoices 
+      WHERE payment_status = 'PAID'
+    `);
 
     res.json({
       total_patients: parseInt(totalPatients.rows[0].count, 10),
       today_appointments: parseInt(todayAppointments.rows[0].count, 10),
       waiting_queue: parseInt(waitingQueue.rows[0].count, 10),
       completed_queue: parseInt(completedQueue.rows[0].count, 10),
-      total_revenue: parseFloat(revenue.rows[0].total)
+      today_revenue: parseFloat(todayRevenue.rows[0].total),
+      total_revenue: parseFloat(totalRevenue.rows[0].total)
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

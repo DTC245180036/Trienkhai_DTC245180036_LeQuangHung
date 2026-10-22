@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hệ Thống Quản Lý Phòng Khám (HMS) - Triển Khai & Quản Trị Hệ Thống</title>
-  <link rel="stylesheet" href="styles.css?v=6.0">
+  <link rel="stylesheet" href="styles.css?v=6.1">
 </head>
 <body>
 
@@ -114,9 +114,9 @@
         <div class="stat-icon green">💵</div>
         <div class="stat-details">
           <h3 id="stat-revenue">-- đ</h3>
-          <p>Doanh Thu Đã Thu</p>
+          <p>Doanh Thu Hôm Nay</p>
           <div class="stat-sub-info">
-            <span class="badge-mini badge-mini-green">Hóa đơn & QR Pay</span>
+            <span class="badge-mini badge-mini-green" id="stat-revenue-total">Tích lũy: -- đ</span>
           </div>
         </div>
       </div>
@@ -527,6 +527,6 @@
   <!-- TOAST NOTIFICATIONS -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script src="app.js?v=6.0"></script>
+  <script src="app.js?v=6.1"></script>
 </body>
 </html>

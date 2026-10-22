@@ -220,7 +220,16 @@ async function loadStats() {
     document.getElementById('stat-patients').innerText = data.total_patients;
     document.getElementById('stat-waiting').innerText = data.waiting_queue;
     document.getElementById('stat-completed').innerText = data.completed_queue;
-    document.getElementById('stat-revenue').innerText = new Intl.NumberFormat('vi-VN').format(data.total_revenue) + ' đ';
+    
+    // Doanh thu hôm nay
+    const todayRev = data.today_revenue !== undefined ? data.today_revenue : 0;
+    document.getElementById('stat-revenue').innerText = new Intl.NumberFormat('vi-VN').format(todayRev) + ' đ';
+
+    // Tổng doanh thu tích lũy
+    const totalBadge = document.getElementById('stat-revenue-total');
+    if (totalBadge) {
+      totalBadge.innerText = `Tích lũy: ${new Intl.NumberFormat('vi-VN').format(data.total_revenue || 0)} đ`;
+    }
   } catch (err) {
     console.error('Stats error:', err);
   }
