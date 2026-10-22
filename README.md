@@ -1,11 +1,10 @@
 # HỆ THỐNG QUẢN LÝ PHÒNG KHÁM ĐA TẦNG (CLINIC MANAGEMENT SYSTEM - HMS)
 ## ĐỒ ÁN MÔN HỌC: TRIỂN KHAI VÀ QUẢN TRỊ HỆ THỐNG PHẦN MỀM
 
-* **Trường:** Đại học Công nghệ Thông tin và Truyền thông (ICTU) - Đại học Thái Nguyên
-* **Khoa:** Khoa Công nghệ Thông tin - Bộ môn Mạng & Quản trị Hệ thống
-* **Sinh viên thực hiện:** Lê Quang Hưng
-* **Mã số sinh viên (MSSV):** DTC245180036
+* **Sinh viên:** Lê Quang Hưng
 * **Lớp:** KTPM K23B
+* **Khoa:** Công nghệ thông tin
+* **Trường:** Đại học Công nghệ Thông tin và Truyền thông
 * **GitHub Repository:** [https://github.com/DTC245180036/Trienkhai_DTC245180036_LeQuangHung](https://github.com/DTC245180036/Trienkhai_DTC245180036_LeQuangHung)
 
 ---

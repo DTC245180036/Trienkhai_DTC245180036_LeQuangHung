@@ -28,7 +28,7 @@ def draw_rounded_rect(draw, bbox, fill, outline, width=1, radius=10):
 # 1. TOP HEADER BANNER
 draw_rounded_rect(draw, [40, 30, width - 40, 110], "#0F172A", "#1E293B", radius=12)
 draw.text((70, 42), "HỆ THỐNG QUẢN LÝ PHÒNG KHÁM (HMS) - KIẾN TRÚC ĐA TẦNG DOCKER COMPOSE", fill="#F8FAFC", font=font_title)
-draw.text((70, 78), "Sinh viên: Lê Quang Hưng - MSSV: DTC245180036 | Lớp: KTPM K23B  |  3 Mạng Cô Lập: frontend_net • backend_net • monitor_net", fill="#38BDF8", font=font_sub)
+draw.text((70, 78), "Sinh viên: Lê Quang Hưng  |  Lớp: KTPM K23B  |  Khoa: Công nghệ thông tin  |  3 Mạng Cô Lập: frontend_net • backend_net • monitor_net", fill="#38BDF8", font=font_sub)
 
 # 2. CLIENT / EXTERNAL USERS LAYER
 client_box = [60, 130, 480, 210]
@@ -126,7 +126,7 @@ for idx, (v_name, v_path, v_desc) in enumerate(v_items):
     draw.text((bx + 12, 788), f"Mount: {v_path}\n{v_desc}", fill="#475569", font=font_box_text)
 
 # Footer caption
-draw.text((width - 450, height - 35), "Triển khai & Quản trị Hệ thống Phần mềm - ICTU 2026", fill="#64748B", font=font_tag)
+draw.text((width - 450, height - 35), "Triển khai & Quản trị Hệ thống Phần mềm - 2026", fill="#64748B", font=font_tag)
 
 # Save high-res image
 img.save("so_do_kien_truc.png", "PNG", dpi=(300, 300))
