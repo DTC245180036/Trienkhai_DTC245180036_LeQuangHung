@@ -121,9 +121,12 @@ CREATE TABLE IF NOT EXISTS medicines (
 );
 
 INSERT INTO medicines (name, active_substance, unit, unit_price, stock_quantity) VALUES
-('Paracetamol 500mg', 'Paracetamol', 'Viên', 1500, 1000),
-('Augmentin 625mg', 'Amoxicillin/Clavulanate', 'Viên', 12000, 500),
-('Vitamin C 500mg', 'Acid Ascorbic', 'Viên', 2000, 800)
+('Paracetamol 500mg (Hạ sốt & Giảm đau)', 'Paracetamol', 'Vỉ (10 viên)', 15000, 1000),
+('Augmentin 625mg (Kháng sinh)', 'Amoxicillin/Clavulanate', 'Vỉ (7 viên)', 85000, 500),
+('Vitamin C 500mg (Tăng đề kháng)', 'Acid Ascorbic', 'Vỉ (10 viên)', 20000, 800),
+('Siro Ho Prospan 100ml (Thảo dược)', '', 'Chai/Lọ', 75000, 300),
+('Men vi sinh Enterogermina (5ml)', '', 'Hộp (20 ống)', 140000, 250),
+('Oresol 245 bù nước & điện giải', '', 'Hộp (10 gói)', 35000, 500)
 ON CONFLICT DO NOTHING;
 
 -- 6. HỒ SƠ BỆNH ÁN & CHỈ ĐỊNH DỊCH VỤ

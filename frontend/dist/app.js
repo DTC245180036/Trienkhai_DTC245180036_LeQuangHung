@@ -1358,15 +1358,15 @@ function updateLiveExamEstimate() {
   }
 }
 
-function addPrescriptionRow(medId = '', qty = 10, instr = 'Uống sau bữa ăn, 2 lần/ngày') {
+function addPrescriptionRow(medId = '', qty = 1, instr = '') {
   const container = document.getElementById('prescription-container');
   const row = document.createElement('div');
   row.className = 'prescription-row';
-  row.style.cssText = 'display: grid; grid-template-columns: 2fr 100px 3fr 40px; gap: 8px; align-items: center;';
+  row.style.cssText = 'display: grid; grid-template-columns: 2.3fr 90px 3fr 36px; gap: 8px; align-items: center;';
 
   const selectedMedId = (typeof medId === 'number' || typeof medId === 'string') ? medId : '';
-  const selectedQty = (typeof qty === 'number' || (typeof qty === 'string' && qty)) ? qty : 10;
-  const selectedInstr = typeof instr === 'string' ? instr : 'Uống sau bữa ăn, 2 lần/ngày';
+  const selectedQty = (typeof qty === 'number' || (typeof qty === 'string' && qty)) ? qty : 1;
+  const selectedInstr = typeof instr === 'string' ? instr : '';
 
   const medOptions = state.medicines.map(m => `
     <option value="${m.id}" ${String(m.id) === String(selectedMedId) ? 'selected' : ''}>${m.name} (${new Intl.NumberFormat('vi-VN').format(m.unit_price)} đ/${m.unit})</option>
@@ -1374,20 +1374,55 @@ function addPrescriptionRow(medId = '', qty = 10, instr = 'Uống sau bữa ăn,
 
   row.innerHTML = `
     <select class="form-control med-select" style="font-size: 0.85rem;">
-      <option value="">-- Chọn thuốc --</option>
+      <option value="">-- Chọn thuốc kê đơn --</option>
       ${medOptions}
     </select>
-    <input type="number" class="form-control med-qty" value="${selectedQty}" min="1" placeholder="SL">
-    <input type="text" class="form-control med-instruction" value="${selectedInstr}" placeholder="Cách dùng">
+    <input type="number" class="form-control med-qty" value="${selectedQty}" min="1" placeholder="SL" title="Số lượng Vỉ / Hộp / Lọ">
+    <input type="text" class="form-control med-instruction" value="${selectedInstr}" placeholder="Liều dùng & hướng dẫn uống...">
     <button type="button" class="btn btn-secondary btn-sm" onclick="this.parentElement.remove(); updateLiveExamEstimate();" style="color: var(--danger); font-weight: bold;">✕</button>
   `;
 
   const sel = row.querySelector('.med-select');
   const inp = row.querySelector('.med-qty');
-  if (sel) sel.addEventListener('change', updateLiveExamEstimate);
+  const instrInput = row.querySelector('.med-instruction');
+
+  // Tự động gợi ý liều dùng chuẩn y tế theo loại thuốc được chọn
+  const applyDefaultInstruction = () => {
+    const m = state.medicines.find(x => String(x.id) === String(sel.value));
+    if (m && (!instrInput.value || instrInput.value === 'Uống sau bữa ăn, 2 lần/ngày')) {
+      const nameLower = (m.name || '').toLowerCase();
+      if (nameLower.includes('paracetamol')) {
+        instrInput.value = 'Uống 1 viên khi sốt trên 38.5°C hoặc đau nhiều, cách nhau 4-6 giờ';
+        inp.value = 1;
+      } else if (nameLower.includes('augmentin') || nameLower.includes('kháng sinh')) {
+        instrInput.value = 'Uống 1 viên/lần, 2 lần/ngày sau bữa ăn (sáng - tối)';
+        inp.value = 2;
+      } else if (nameLower.includes('vitamin c')) {
+        instrInput.value = 'Uống 1 viên/ngày vào buổi sáng sau khi ăn';
+        inp.value = 1;
+      } else if (nameLower.includes('prospan') || nameLower.includes('siro')) {
+        instrInput.value = 'Uống 5-10ml/lần, 3 lần/ngày sau khi ăn';
+        inp.value = 1;
+      } else if (nameLower.includes('men vi sinh') || nameLower.includes('enterogermina')) {
+        instrInput.value = 'Uống 1 ống/lần, 2 lần/ngày trước bữa ăn';
+        inp.value = 1;
+      } else if (nameLower.includes('oresol')) {
+        instrInput.value = 'Pha 1 gói với 200ml nước sôi để nguội, uống bù nước';
+        inp.value = 1;
+      } else {
+        instrInput.value = 'Uống sau bữa ăn, 2 lần/ngày';
+      }
+    }
+    updateLiveExamEstimate();
+  };
+
+  if (sel) sel.addEventListener('change', applyDefaultInstruction);
   if (inp) inp.addEventListener('input', updateLiveExamEstimate);
 
   container.appendChild(row);
+  if (selectedMedId && !selectedInstr) {
+    applyDefaultInstruction();
+  }
   updateLiveExamEstimate();
 }
 
@@ -1737,12 +1772,8 @@ function setupRevenueReportEvents() {
     btnExportWord.addEventListener('click', exportRevenueWord);
   }
 
-  if (btnPrint) {
-    btnPrint.addEventListener('click', printRevenueReportA4);
-  }
-
   if (btnCashierPrintShift) {
-    btnCashierPrintShift.addEventListener('click', printCashierShiftHandover);
+    btnCashierPrintShift.addEventListener('click', exportCashierShiftWord);
   }
 }
 
@@ -2181,12 +2212,17 @@ function printRevenueReportA4() {
   win.document.close();
 }
 
-function printCashierShiftHandover() {
+function exportCashierShiftWord() {
   const invoices = state.invoices || [];
+  if (invoices.length === 0) {
+    showToast('Chưa có dữ liệu hóa đơn nào trong ca trực để xuất biên bản!', 'warning');
+    return;
+  }
   const fmt = (n) => new Intl.NumberFormat('vi-VN').format(n || 0) + ' đ';
   const now = new Date();
-  const printDateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
+  const printDateStr = `${now.getDate()} tháng ${now.getMonth() + 1} năm ${now.getFullYear()}`;
   const printTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const fileDateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
 
   let totalPaid = 0;
   let totalCash = 0;
@@ -2209,96 +2245,204 @@ function printCashierShiftHandover() {
 
     return `
       <tr>
-        <td style="text-align: center;">${idx + 1}</td>
-        <td><strong>#HD-${String(inv.id).padStart(4, '0')}</strong></td>
-        <td>${inv.patient_name}</td>
-        <td>${inv.doctor_name || 'BS Phụ trách'}</td>
-        <td style="text-align: right; font-weight: bold;">${fmt(amt)}</td>
-        <td style="text-align: center;">${inv.payment_method === 'TRANSFER' ? 'Chuyển khoản' : 'Tiền mặt'}</td>
-        <td style="text-align: center; font-weight: bold; color: ${inv.payment_status === 'PAID' ? '#047857' : '#dc2626'};">
+        <td style="text-align: center; border: 1px solid #333333; padding: 6px;">${idx + 1}</td>
+        <td style="border: 1px solid #333333; padding: 6px; text-align: center;"><strong>#HD-${String(inv.id).padStart(4, '0')}</strong></td>
+        <td style="border: 1px solid #333333; padding: 6px;"><strong>${inv.patient_name}</strong></td>
+        <td style="border: 1px solid #333333; padding: 6px;">${inv.doctor_name || 'BS Phụ trách'}</td>
+        <td style="text-align: right; border: 1px solid #333333; padding: 6px; font-weight: bold;">${fmt(amt)}</td>
+        <td style="text-align: center; border: 1px solid #333333; padding: 6px;">${inv.payment_method === 'TRANSFER' ? 'Chuyển khoản QR' : 'Tiền mặt'}</td>
+        <td style="text-align: center; border: 1px solid #333333; padding: 6px; font-weight: bold; color: ${inv.payment_status === 'PAID' ? '#047857' : '#dc2626'};">
           ${inv.payment_status === 'PAID' ? 'ĐÃ THU' : 'CHƯA THU'}
         </td>
       </tr>
     `;
   }).join('');
 
-  const win = window.open('', '_blank', 'width=800,height=800');
-  if (!win) return;
-  win.document.write(`
-    <!DOCTYPE html>
-    <html lang="vi">
+  const cashierName = state.currentUser ? state.currentUser.full_name : 'Phạm Thị Lan (Thu Ngân)';
+
+  const wordContent = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
     <head>
       <meta charset="utf-8">
-      <title>Biên Bản Chốt Ca Thu Ngân - ${printDateStr}</title>
+      <title>Biên Bản Chốt Ca Thu Ngân</title>
+      <!--[if gte mso 9]>
+      <xml>
+        <w:WordDocument>
+          <w:View>Print</w:View>
+          <w:Zoom>100</w:Zoom>
+          <w:DoNotOptimizeForBrowser/>
+        </w:WordDocument>
+      </xml>
+      <![endif]-->
       <style>
-        body { font-family: 'Times New Roman', serif; font-size: 13pt; line-height: 1.4; color: #000; padding: 15px; }
-        .center { text-align: center; }
-        table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 11pt; }
-        th, td { border: 1px solid #333; padding: 6px 8px; }
-        th { background: #f0f0f0; }
-        .signatures { display: flex; justify-content: space-between; margin-top: 40px; text-align: center; }
-        .sig-block { width: 45%; }
-        .sig-space { height: 70px; }
-        @media print { .no-print { display: none; } }
+        @page Section1 {
+          size: 595.3pt 841.9pt; /* Khổ A4 */
+          margin: 54.0pt 54.0pt 54.0pt 54.0pt;
+          mso-header-margin: 36.0pt;
+          mso-footer-margin: 36.0pt;
+          mso-paper-source: 0;
+        }
+        div.Section1 { page: Section1; }
+        body {
+          font-family: 'Times New Roman', Times, serif;
+          font-size: 13pt;
+          line-height: 1.35;
+          color: #000000;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          font-family: 'Times New Roman', Times, serif;
+        }
+        .header-table td {
+          border: none !important;
+          padding: 2px 4px;
+        }
+        .data-table {
+          margin: 12px 0 20px 0;
+          font-size: 11pt;
+        }
+        .data-table th, .data-table td {
+          border: 1px solid #333333;
+          padding: 6px 8px;
+        }
+        .data-table th {
+          background-color: #f2f2f2;
+          font-weight: bold;
+        }
+        .sig-table td {
+          border: none !important;
+          text-align: center;
+          padding: 10px 4px;
+        }
       </style>
     </head>
     <body>
-      <div class="no-print" style="margin-bottom: 15px; text-align: right;">
-        <button onclick="window.print()" style="padding: 8px 16px; font-weight: bold; background: #0d9488; color: #fff; border: none; border-radius: 4px; cursor: pointer;">🖨️ In Bảng Kê Chốt Ca</button>
-      </div>
-      <div class="center">
-        <strong>PHÒNG KHÁM ĐA KHOA QUỐC TẾ DTC</strong><br>
-        <span style="font-size: 11pt;">Quầy Thu Ngân & Viện Phí</span>
-        <h2 style="margin: 15px 0 5px 0; font-size: 15pt;">BIÊN BẢN BÀN GIAO CA & ĐỐI SOÁT QUỸ THU NGÂN</h2>
-        <p style="margin: 0; font-style: italic; font-size: 11pt;">Ngày ${printDateStr} - Thời điểm in: ${printTimeStr}</p>
-      </div>
-
-      <div style="margin: 15px 0; padding: 10px; background: #f8fafc; border: 1px solid #ccc; font-size: 12pt;">
-        <div><strong>Nhân viên thu ngân trực ca:</strong> ${state.currentUser ? state.currentUser.full_name : 'Nguyễn Văn Thu (thungan01)'}</div>
-        <div><strong>Tổng tiền thực thu trong ca:</strong> <span style="font-size: 13pt; font-weight: bold; color: #047857;">${fmt(totalPaid)}</span> (Đã thu ${countPaid} hóa đơn)</div>
-        <div style="margin-left: 15px; font-size: 11pt;">
-          - Tiền mặt tại két: <strong>${fmt(totalCash)}</strong><br>
-          - Chuyển khoản QR / Ngân hàng: <strong>${fmt(totalTransfer)}</strong>
-        </div>
-        <div><strong>Hóa đơn chưa thu tiền:</strong> ${fmt(totalUnpaid)} (${countUnpaid} hóa đơn)</div>
-      </div>
-
-      <h4 style="margin: 10px 0 5px 0;">BẢNG KÊ CHI TIẾT TỪNG HÓA ĐƠN TRONG CA:</h4>
-      <table>
-        <thead>
+      <div class="Section1">
+        <!-- HEADER QUỐC HIỆU & ĐƠN VỊ -->
+        <table class="header-table" style="width: 100%; margin-bottom: 20px;">
           <tr>
-            <th style="width: 40px;">STT</th>
-            <th>Mã HĐ</th>
-            <th>Tên Bệnh Nhân</th>
-            <th>Bác Sĩ</th>
-            <th style="text-align: right;">Tổng Tiền</th>
-            <th>Hình Thức</th>
-            <th>Trạng Thái</th>
+            <td style="width: 50%; vertical-align: top; text-align: left;">
+              <strong>SỞ Y TẾ TP. HÀ NỘI</strong><br>
+              <strong>BỆNH VIỆN ĐA KHOA ICTU</strong><br>
+              <span style="font-size: 10pt;">Quầy Thu Ngân & Viện Phí<br>Hotline: 1900 6868</span>
+            </td>
+            <td style="width: 50%; vertical-align: top; text-align: center;">
+              <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br>
+              <strong>Độc lập - Tự do - Hạnh phúc</strong><br>
+              <span>------------------------</span>
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          ${rows}
-        </tbody>
-      </table>
+        </table>
 
-      <div class="signatures">
-        <div class="sig-block">
-          <strong>THU NGÂN GIAO CA</strong><br>
-          <span style="font-size: 10pt; font-style: italic;">(Ký, ghi rõ họ tên và số tiền bàn giao)</span>
-          <div class="sig-space"></div>
-          <strong>${state.currentUser ? state.currentUser.full_name : 'Nguyễn Văn Thu'}</strong>
+        <!-- TIÊU ĐỀ BIÊN BẢN -->
+        <div style="text-align: center; margin: 20px 0 15px 0;">
+          <h2 style="font-size: 16pt; font-weight: bold; text-transform: uppercase; margin: 0;">BIÊN BẢN BÀN GIAO CA & ĐỐI SOÁT QUỸ THU NGÂN</h2>
+          <p style="margin: 6px 0; font-style: italic; font-size: 11pt;">Thời điểm chốt ca: <strong>${printTimeStr} ngày ${printDateStr}</strong></p>
         </div>
-        <div class="sig-block">
-          <strong>KẾ TOÁN / THU NGÂN NHẬN CA</strong><br>
-          <span style="font-size: 10pt; font-style: italic;">(Ký, ghi rõ họ tên và xác nhận khớp quỹ)</span>
-          <div class="sig-space"></div>
-          <strong>....................................................</strong>
+
+        <!-- THÔNG TIN CA TRỰC -->
+        <div style="font-weight: bold; margin-top: 15px; font-size: 12pt; text-transform: uppercase;">I. TỔNG HỢP GIAO NHẬN QUỸ CA TRỰC</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 45px; text-align: center;">STT</th>
+              <th>Khoản Mục Nghiệp Vụ</th>
+              <th style="width: 160px; text-align: center;">Số Lượng / Chứng Từ</th>
+              <th style="width: 180px; text-align: right;">Số Tiền (VNĐ)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="text-align: center;">1</td>
+              <td><strong>Thu tiền mặt thực tế tại két</strong> (Bàn giao trực tiếp cho thủ quỹ)</td>
+              <td style="text-align: center;">Kiểm đếm tại quỹ</td>
+              <td style="text-align: right; font-weight: bold; color: #0284c7;">${fmt(totalCash)}</td>
+            </tr>
+            <tr>
+              <td style="text-align: center;">2</td>
+              <td><strong>Thu chuyển khoản ngân hàng / VietQR / POS</strong></td>
+              <td style="text-align: center;">Tài khoản viện phí</td>
+              <td style="text-align: right; font-weight: bold; color: #7c3aed;">${fmt(totalTransfer)}</td>
+            </tr>
+            <tr style="background-color: #f7f7f7; font-weight: bold;">
+              <td style="text-align: center;">3</td>
+              <td style="text-transform: uppercase;">TỔNG THỰC THU TRONG CA (ĐÃ HOÀN TẤT):</td>
+              <td style="text-align: center;">${countPaid} hóa đơn</td>
+              <td style="text-align: right; font-size: 12pt; color: #047857;">${fmt(totalPaid)}</td>
+            </tr>
+            <tr>
+              <td style="text-align: center;">4</td>
+              <td><strong>Hóa đơn chưa thu tiền (Bệnh nhân đang chờ nộp viện phí)</strong></td>
+              <td style="text-align: center;">${countUnpaid} hóa đơn</td>
+              <td style="text-align: right; font-weight: bold; color: #dc2626;">${fmt(totalUnpaid)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- BẢNG KÊ CHI TIẾT -->
+        <div style="font-weight: bold; margin-top: 20px; font-size: 12pt; text-transform: uppercase;">II. BẢNG KÊ CHI TIẾT TỪNG HÓA ĐƠN TRONG CA</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 40px; text-align: center;">STT</th>
+              <th style="width: 80px; text-align: center;">Mã HĐ</th>
+              <th>Họ và Tên Bệnh Nhân</th>
+              <th>Bác Sĩ Khám</th>
+              <th style="width: 120px; text-align: right;">Tổng Tiền</th>
+              <th style="width: 110px; text-align: center;">Hình Thức</th>
+              <th style="width: 90px; text-align: center;">Trạng Thái</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+
+        <div style="text-align: right; font-style: italic; margin-top: 25px;">
+          Hà Nội, ngày ${printDateStr}
         </div>
+
+        <!-- CHỮ KÝ 3 BÊN -->
+        <table class="sig-table" style="width: 100%; margin-top: 15px;">
+          <tr>
+            <td style="width: 33%; vertical-align: top;">
+              <strong>NHÂN VIÊN GIAO CA</strong><br>
+              <span style="font-style: italic; font-size: 10pt;">(Ký, ghi rõ họ tên & số tiền giao)</span>
+              <br><br><br><br><br>
+              <strong>${cashierName}</strong>
+            </td>
+            <td style="width: 34%; vertical-align: top;">
+              <strong>KẾ TOÁN QUỸ / NHẬN CA</strong><br>
+              <span style="font-style: italic; font-size: 10pt;">(Ký, ghi rõ họ tên & khớp két)</span>
+              <br><br><br><br><br>
+              <strong>Nguyễn Thị Thu</strong>
+            </td>
+            <td style="width: 33%; vertical-align: top;">
+              <strong>KẾ TOÁN TRƯỞNG PHÒNG KHÁM</strong><br>
+              <span style="font-style: italic; font-size: 10pt;">(Ký tên và phê duyệt)</span>
+              <br><br><br><br><br>
+              <strong>Trần Thị Kim Anh</strong>
+            </td>
+          </tr>
+        </table>
       </div>
     </body>
     </html>
-  `);
-  win.document.close();
+  `;
+
+  const blob = new Blob(['\ufeff', wordContent], {
+    type: 'application/msword;charset=utf-8'
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `BienBan_ChotCa_ThuNgan_${fileDateStr}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Đã xuất biên bản chốt ca thu ngân (.doc) khổ A4 thành công!', 'success');
 }
 
 function exportRevenueCSV() {
