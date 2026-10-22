@@ -684,6 +684,10 @@ function setupModal() {
   }
   const nameInputEl = document.getElementById('p-name');
   if (nameInputEl) {
+    nameInputEl.addEventListener('input', (e) => {
+      // Chỉ cho phép chữ cái tiếng Việt và khoảng trắng, tự động loại bỏ số và ký tự đặc biệt ngay khi nhập
+      e.target.value = e.target.value.replace(/[^a-zA-ZàáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđĐ\s]/gu, '');
+    });
     nameInputEl.addEventListener('blur', checkExistingPatient);
   }
 
@@ -703,7 +707,7 @@ function setupModal() {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = (document.getElementById('p-name').value || '').trim();
+    const rawName = (document.getElementById('p-name').value || '').trim();
     const phone = (document.getElementById('p-phone').value || '').trim();
     const idcard = (document.getElementById('p-idcard').value || '').trim();
     const dob = document.getElementById('p-dob').value;
@@ -712,11 +716,51 @@ function setupModal() {
     const address = (document.getElementById('p-address').value || '').trim();
     const symptoms = (document.getElementById('p-symptoms').value || '').trim();
 
-    if (!name) {
+    // 0. Kiểm tra nghiêm ngặt họ và tên bệnh nhân
+    if (!rawName) {
       showToast('Vui lòng nhập họ và tên bệnh nhân!', 'warning');
       document.getElementById('p-name').focus();
       return;
     }
+
+    const vietnameseNameRegex = /^[a-zA-ZàáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđĐ\s]+$/u;
+    if (!vietnameseNameRegex.test(rawName)) {
+      showToast('Họ và tên không hợp lệ! Họ tên chỉ được chứa chữ cái tiếng Việt, không chứa chữ số hoặc ký tự lạ.', 'error');
+      document.getElementById('p-name').focus();
+      return;
+    }
+
+    const nameWords = rawName.split(/\s+/).filter(w => w.length > 0);
+    if (nameWords.length < 2) {
+      showToast('Họ và tên không hợp lệ! Vui lòng nhập đầy đủ cả Họ và Tên theo CCCD (tối thiểu 2 từ, ví dụ: "Nguyễn Văn An", "Trần Mai"). Không được chỉ nhập 1 từ đơn lẻ.', 'error');
+      document.getElementById('p-name').focus();
+      return;
+    }
+
+    if (nameWords.length > 7 || rawName.length < 4 || rawName.length > 50) {
+      showToast('Độ dài họ và tên không hợp lệ (từ 4 đến 50 ký tự, tối đa 7 từ)!', 'error');
+      document.getElementById('p-name').focus();
+      return;
+    }
+
+    if (nameWords.some(w => w.length < 2)) {
+      showToast('Họ và tên không hợp lệ! Mỗi từ trong họ tên phải có ít nhất 2 chữ cái (ví dụ: "Lê An").', 'error');
+      document.getElementById('p-name').focus();
+      return;
+    }
+
+    const blockedTerms = ['sigma', 'boi', 'skibidi', 'luffy', 'zoro', 'naruto', 'goku', 'doraemon', 'test', 'admin', 'root', 'queeqweqew', 'asdf'];
+    if (nameWords.some(w => blockedTerms.includes(w.toLowerCase()))) {
+      showToast('Họ và tên bệnh nhân không hợp lệ! Vui lòng nhập họ và tên thật theo CCCD / giấy tờ tùy thân.', 'error');
+      document.getElementById('p-name').focus();
+      return;
+    }
+
+    // Tự động chuẩn hóa viết hoa chữ cái đầu (Title Case)
+    const normalizedName = nameWords
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+    document.getElementById('p-name').value = normalizedName;
 
     // 1. Kiểm tra chuẩn CCCD/CMND: đúng 12 chữ số CCCD (hoặc 9 chữ số CMND), chỉ gồm chữ số
     const cccdRegex = /^\d{9}$|^\d{12}$/;
@@ -739,7 +783,7 @@ function setupModal() {
       const patRes = await fetch(`${API_BASE}/patients`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full_name: name, phone, identity_card: idcard, dob, gender, address })
+        body: JSON.stringify({ full_name: normalizedName, phone, identity_card: idcard, dob, gender, address })
       });
       if (!patRes.ok) {
         const errJson = await patRes.json().catch(() => ({}));
@@ -766,7 +810,7 @@ function setupModal() {
       }
       const appData = await appRes.json();
 
-      showToast(`Đã cấp số thứ tự #${appData.queue_number} cho bệnh nhân ${name}!`, 'success');
+      showToast(`Đã cấp số thứ tự #${appData.queue_number} cho bệnh nhân ${normalizedName}!`, 'success');
       modal.classList.remove('open');
       form.reset();
       if (statusBanner) statusBanner.style.display = 'none';

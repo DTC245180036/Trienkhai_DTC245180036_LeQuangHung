@@ -473,9 +473,53 @@ app.get('/patients', async (req, res) => {
 app.post('/patients', async (req, res) => {
   const { full_name, phone, identity_card, dob, gender, address, medical_history } = req.body;
   
-  if (!full_name || !full_name.trim()) {
-    return res.status(400).json({ error: 'Họ và tên bệnh nhân là bắt buộc' });
+  const cleanRawName = (full_name || '').toString().trim();
+  if (!cleanRawName) {
+    return res.status(400).json({ error: 'Họ và tên bệnh nhân là bắt buộc!' });
   }
+
+  // 1. Kiểm tra ký tự: Chỉ cho phép chữ cái tiếng Việt và dấu cách (không chứa số, ký tự đặc biệt)
+  const vietnameseNameRegex = /^[a-zA-ZàáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđĐ\s]+$/u;
+  if (!vietnameseNameRegex.test(cleanRawName)) {
+    return res.status(400).json({ 
+      error: 'Họ và tên không hợp lệ! Họ tên chỉ được chứa chữ cái tiếng Việt, không chứa chữ số hoặc ký tự lạ.' 
+    });
+  }
+
+  // 2. Tách từ và kiểm tra cấu trúc họ và tên (ít nhất 2 từ: Họ + Tên)
+  const nameWords = cleanRawName.split(/\s+/).filter(w => w.length > 0);
+  if (nameWords.length < 2) {
+    return res.status(400).json({ 
+      error: 'Họ và tên bệnh nhân không hợp lệ! Vui lòng nhập đầy đủ cả Họ và Tên theo CCCD (tối thiểu 2 từ, ví dụ: "Nguyễn Văn An", "Trần Mai"). Không được chỉ nhập 1 từ đơn lẻ như "Luffy", "Nam".' 
+    });
+  }
+
+  if (nameWords.length > 7 || cleanRawName.length < 4 || cleanRawName.length > 50) {
+    return res.status(400).json({ 
+      error: 'Độ dài họ và tên không hợp lệ (từ 4 đến 50 ký tự, tối đa 7 từ)!' 
+    });
+  }
+
+  // 3. Mỗi từ phải có ít nhất 2 chữ cái (chặn troll kiểu "A B", "X Y Z")
+  if (nameWords.some(w => w.length < 2)) {
+    return res.status(400).json({ 
+      error: 'Họ và tên không hợp lệ! Mỗi từ trong họ tên phải có ít nhất 2 chữ cái (ví dụ: "Lê An").' 
+    });
+  }
+
+  // 4. Chặn các từ ngữ troll / nhân vật hoạt hình / tiếng lóng mạng
+  const blockedTerms = ['sigma', 'boi', 'skibidi', 'luffy', 'zoro', 'naruto', 'goku', 'doraemon', 'test', 'admin', 'root', 'queeqweqew', 'asdf'];
+  const hasBlocked = nameWords.some(w => blockedTerms.includes(w.toLowerCase()));
+  if (hasBlocked) {
+    return res.status(400).json({ 
+      error: 'Họ và tên bệnh nhân không hợp lệ! Vui lòng nhập họ và tên thật của bệnh nhân theo giấy tờ tùy thân / CCCD.' 
+    });
+  }
+
+  // 5. Chuẩn hóa viết hoa chữ cái đầu (Title Case)
+  const normalizedFullName = nameWords
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
 
   // Làm sạch dữ liệu đầu vào
   const cleanPhone = (phone || '').toString().trim();
@@ -534,7 +578,7 @@ app.post('/patients', async (req, res) => {
       if (pat.user_id) {
         await client.query(`
           UPDATE users SET full_name = $1, phone = COALESCE(NULLIF($2, ''), phone) WHERE id = $3
-        `, [full_name.trim(), cleanPhone, pat.user_id]);
+        `, [normalizedFullName, cleanPhone, pat.user_id]);
       }
       await client.query(`
         UPDATE patients 
@@ -546,7 +590,7 @@ app.post('/patients', async (req, res) => {
       `, [dob || null, gender || '', address || '', medical_history || '', pat.id]);
 
       await client.query('COMMIT');
-      return res.status(200).json({ ...pat, full_name: full_name.trim(), phone: cleanPhone || pat.phone });
+      return res.status(200).json({ ...pat, full_name: normalizedFullName, phone: cleanPhone || pat.phone });
     }
 
     // 2. Nếu là bệnh nhân mới: tạo user và profile bệnh nhân
@@ -555,7 +599,7 @@ app.post('/patients', async (req, res) => {
       INSERT INTO users (username, password_hash, full_name, phone, role_id)
       VALUES ($1, 'scrypt:default', $2, $3, 4)
       RETURNING id
-    `, [username, full_name.trim(), cleanPhone]);
+    `, [username, normalizedFullName, cleanPhone]);
 
     const userId = userRes.rows[0].id;
 
@@ -567,7 +611,7 @@ app.post('/patients', async (req, res) => {
     `, [userId, cleanIdCard, dob || '2000-01-01', gender || 'Nam', address || '', medical_history || '']);
 
     await client.query('COMMIT');
-    res.status(201).json({ ...patientRes.rows[0], full_name: full_name.trim(), phone: cleanPhone });
+    res.status(201).json({ ...patientRes.rows[0], full_name: normalizedFullName, phone: cleanPhone });
   } catch (err) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: 'Lỗi thêm bệnh nhân: ' + err.message });
