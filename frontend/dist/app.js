@@ -2862,3 +2862,32 @@ function exportRevenueCSV() {
   document.body.removeChild(link);
   showToast('Đã xuất file Excel (CSV) thành công!', 'success');
 }
+
+// ==========================================
+// THU GỌN / MỞ RỘNG THANH TIÊU ĐỀ & CHỈ SỐ KPI
+// ==========================================
+function toggleHeaderCollapse() {
+  const header = document.querySelector('.app-header');
+  const expandPill = document.getElementById('header-expand-pill');
+  if (!header) return;
+
+  const isCollapsed = header.classList.toggle('header-collapsed');
+  if (expandPill) {
+    expandPill.style.display = isCollapsed ? 'flex' : 'none';
+  }
+}
+
+function toggleStatsCollapse() {
+  const statsSection = document.getElementById('stats-section');
+  const icon = document.getElementById('stats-toggle-icon');
+  const text = document.getElementById('stats-toggle-text');
+  if (!statsSection) return;
+
+  const isCollapsed = statsSection.classList.toggle('stats-collapsed');
+  if (icon) icon.innerText = isCollapsed ? '▼' : '▲';
+  if (text) text.innerText = isCollapsed ? 'Mở rộng chỉ số' : 'Thu gọn chỉ số';
+}
+
+window.toggleHeaderCollapse = toggleHeaderCollapse;
+window.toggleStatsCollapse = toggleStatsCollapse;
+

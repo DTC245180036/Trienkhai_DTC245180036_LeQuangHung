@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hệ Thống Quản Lý Phòng Khám (HMS) - Triển Khai & Quản Trị Hệ Thống</title>
-  <link rel="stylesheet" href="styles.css?v=6.7">
+  <link rel="stylesheet" href="styles.css?v=7.0">
 </head>
 
 <body>
@@ -184,12 +184,32 @@
             style="padding: 5px 12px; font-size: 0.78rem; font-weight: 700; border-radius: 999px; margin-left: 6px; color: #dc2626; border: 1px solid #fecaca; background: #fff5f5; cursor: pointer; display: flex; align-items: center; gap: 4px;">
             🚪 Đăng Xuất
           </button>
+          <button type="button" id="btn-toggle-header" class="btn-toggle-header" onclick="toggleHeaderCollapse()" title="Thu gọn thanh điều khiển lên trên">
+            ▲
+          </button>
         </div>
       </div>
     </header>
 
+    <!-- NÚT MỞ LẠI THANH HEADER KHI ĐÃ THU GỌN -->
+    <div id="header-expand-pill" class="header-expand-pill" style="display: none;" onclick="toggleHeaderCollapse()" title="Bấm để mở lại thanh điều khiển">
+      <span>🩺 BỆNH VIỆN ĐA KHOA ICTU</span>
+      <span style="color: #38bdf8; font-weight: 800;">▼ Mở thanh điều khiển</span>
+    </div>
+
     <!-- 3. NỘI DUNG CHÍNH (MAIN CONTAINER) -->
     <main class="main-content">
+
+      <!-- THANH ĐIỀU KHIỂN & NÚT THU GỌN CHỈ SỐ KPI -->
+      <div class="stats-header-bar">
+        <span style="font-size: 0.82rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+          📊 Thống Kê & Chỉ Số Hoạt Động Trực Tuyến
+        </span>
+        <button type="button" id="btn-toggle-stats" class="btn-toggle-stats" onclick="toggleStatsCollapse()" title="Thu gọn / Mở rộng 4 thẻ chỉ số thống kê">
+          <span id="stats-toggle-icon">▲</span>
+          <span id="stats-toggle-text">Thu gọn chỉ số</span>
+        </button>
+      </div>
 
       <!-- KPI THỐNG KÊ TỔNG QUAN -->
       <section class="stats-grid" id="stats-section">
@@ -967,7 +987,7 @@
   <!-- TOAST NOTIFICATIONS -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script src="app.js?v=7.0"></script>
+  <script src="app.js?v=7.1"></script>
 </body>
 
 </html>
