@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hệ Thống Quản Lý Phòng Khám (HMS) - Triển Khai & Quản Trị Hệ Thống</title>
-  <link rel="stylesheet" href="styles.css?v=6.1">
+  <link rel="stylesheet" href="styles.css?v=6.2">
 </head>
 <body>
 
@@ -94,7 +94,7 @@
         <div class="stat-icon amber">⏳</div>
         <div class="stat-details">
           <h3 id="stat-waiting">--</h3>
-          <p>Đang Chờ Khám Hôm Nay</p>
+          <p id="stat-waiting-label">Đang Chờ Khám Hôm Nay</p>
           <div class="stat-sub-info">
             <span class="badge-mini badge-mini-amber">Cấp số tự động (Redis)</span>
           </div>
@@ -104,7 +104,7 @@
         <div class="stat-icon purple">🩺</div>
         <div class="stat-details">
           <h3 id="stat-completed">--</h3>
-          <p>Lượt Đã Khám Xong</p>
+          <p id="stat-completed-label">Lượt Đã Khám Xong</p>
           <div class="stat-sub-info">
             <span class="badge-mini badge-mini-purple">Lưu trữ EMR & CLS</span>
           </div>
@@ -114,7 +114,7 @@
         <div class="stat-icon green">💵</div>
         <div class="stat-details">
           <h3 id="stat-revenue">-- đ</h3>
-          <p>Doanh Thu Hôm Nay</p>
+          <p id="stat-revenue-label">Doanh Thu Hôm Nay</p>
           <div class="stat-sub-info">
             <span class="badge-mini badge-mini-green" id="stat-revenue-total">Tích lũy: -- đ</span>
           </div>
@@ -127,11 +127,22 @@
     <!-- ======================================================== -->
     <div id="tab-reception" class="tab-pane active">
       <div class="card">
-        <div class="card-header">
+        <div class="card-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
           <div class="card-title">
-            <span>📋 Tiếp Nhận Bệnh Nhân & Hàng Đợi Khám Trong Ngày</span>
+            <span id="reception-table-title">📋 Tiếp Nhận Bệnh Nhân & Hàng Đợi Khám</span>
           </div>
-          <div>
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <!-- Bộ lọc thời gian theo ngày -->
+            <div style="display: inline-flex; align-items: center; gap: 6px; background: #f8fafc; padding: 4px 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+              <span style="font-size: 0.8rem; font-weight: 700; color: #475569;">📅 Xem ngày:</span>
+              <select id="reception-date-filter" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 8px; font-size: 0.8rem; font-weight: 600; background: #ffffff; color: var(--text-main); outline: none; cursor: pointer;">
+                <option value="today">Hôm nay</option>
+                <option value="all">Tất cả các ngày</option>
+                <option value="custom">Chọn ngày khác...</option>
+              </select>
+              <input type="date" id="reception-custom-date" style="display: none; border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 8px; font-size: 0.78rem; background: #ffffff; color: var(--text-main); outline: none;">
+            </div>
+
             <button class="btn btn-primary" id="btn-open-new-patient">
               ➕ Tiếp Nhận & Cấp Số Mới
             </button>
@@ -527,6 +538,6 @@
   <!-- TOAST NOTIFICATIONS -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script src="app.js?v=6.1"></script>
+  <script src="app.js?v=6.2"></script>
 </body>
 </html>

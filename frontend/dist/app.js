@@ -13,6 +13,7 @@ const state = {
     role: 'LỄ TÂN (Tiếp nhận & Cấp số)',
     avatar: 'LT'
   },
+  filterDate: 'today',
   doctors: [],
   services: [],
   medicines: [],
@@ -30,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupModal();
   setupDoctorExamForm();
   setupStressTest();
+  setupReceptionDateFilter();
 
   // Khởi tạo phân quyền ban đầu (RBAC Enforcement)
   applyRolePermissions(state.currentRole);
@@ -39,6 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setInterval(checkServerHealth, 10000);
 
   await loadInitialCatalogs();
+  await loadAvailableDates();
   await loadDashboardData();
 });
 
@@ -214,16 +217,42 @@ async function loadDashboardData() {
 
 async function loadStats() {
   try {
-    const res = await fetch(`${API_BASE}/stats`);
+    const dateParam = state.filterDate || 'today';
+    const res = await fetch(`${API_BASE}/stats?date=${dateParam}`);
     if (!res.ok) return;
     const data = await res.json();
     document.getElementById('stat-patients').innerText = data.total_patients;
     document.getElementById('stat-waiting').innerText = data.waiting_queue;
     document.getElementById('stat-completed').innerText = data.completed_queue;
     
-    // Doanh thu hôm nay
-    const todayRev = data.today_revenue !== undefined ? data.today_revenue : 0;
-    document.getElementById('stat-revenue').innerText = new Intl.NumberFormat('vi-VN').format(todayRev) + ' đ';
+    // Doanh thu theo ngày đã chọn
+    const revAmount = data.date_revenue !== undefined ? data.date_revenue : data.today_revenue;
+    document.getElementById('stat-revenue').innerText = new Intl.NumberFormat('vi-VN').format(revAmount) + ' đ';
+
+    // Cập nhật nhãn động theo ngày được chọn
+    const revLabel = document.getElementById('stat-revenue-label');
+    const waitLabel = document.getElementById('stat-waiting-label');
+    const compLabel = document.getElementById('stat-completed-label');
+    const tableTitle = document.getElementById('reception-table-title');
+
+    if (state.filterDate === 'all') {
+      if (revLabel) revLabel.innerText = 'Tổng Doanh Thu Hệ Thống';
+      if (waitLabel) waitLabel.innerText = 'Tổng Chờ Khám';
+      if (compLabel) compLabel.innerText = 'Tổng Lượt Đã Khám';
+      if (tableTitle) tableTitle.innerText = '📋 Toàn Bộ Lịch Sử Bệnh Nhân Khám Bệnh';
+    } else if (state.filterDate === 'today' || !state.filterDate) {
+      if (revLabel) revLabel.innerText = 'Doanh Thu Hôm Nay';
+      if (waitLabel) waitLabel.innerText = 'Đang Chờ Khám Hôm Nay';
+      if (compLabel) compLabel.innerText = 'Lượt Đã Khám Hôm Nay';
+      if (tableTitle) tableTitle.innerText = '📋 Tiếp Nhận Bệnh Nhân & Hàng Đợi Khám Trong Ngày';
+    } else {
+      const parts = state.filterDate.split('-');
+      const displayDate = parts.length === 3 ? `${parts[2]}/${parts[1]}` : state.filterDate;
+      if (revLabel) revLabel.innerText = `Doanh Thu Ngày ${displayDate}`;
+      if (waitLabel) waitLabel.innerText = `Chờ Khám Ngày ${displayDate}`;
+      if (compLabel) compLabel.innerText = `Đã Khám Ngày ${displayDate}`;
+      if (tableTitle) tableTitle.innerText = `📋 Danh Sách Khám Bệnh Ngày ${displayDate}/${parts[0]}`;
+    }
 
     // Tổng doanh thu tích lũy
     const totalBadge = document.getElementById('stat-revenue-total');
@@ -240,7 +269,8 @@ async function loadStats() {
 // ==========================================
 async function loadAppointments() {
   try {
-    const res = await fetch(`${API_BASE}/appointments`);
+    const dateParam = state.filterDate || 'today';
+    const res = await fetch(`${API_BASE}/appointments?date=${dateParam}`);
     if (!res.ok) throw new Error('Không thể tải lịch khám');
     state.appointments = await res.json();
     renderReceptionTable();
@@ -314,6 +344,65 @@ function populateDoctorDropdown() {
   }
 }
 
+async function loadAvailableDates() {
+  const select = document.getElementById('reception-date-filter');
+  if (!select) return;
+  try {
+    const res = await fetch(`${API_BASE}/appointments/dates`);
+    if (!res.ok) return;
+    const dates = await res.json();
+    
+    const curVal = state.filterDate || 'today';
+    let optionsHtml = `<option value="today">Hôm nay</option>`;
+    
+    dates.forEach(d => {
+      const parts = d.split('-');
+      const formatted = parts.length === 3 ? `${parts[2]}/${parts[1]}` : d;
+      optionsHtml += `<option value="${d}">Ngày ${formatted} (${d})</option>`;
+    });
+    
+    optionsHtml += `
+      <option value="all">Tất cả các ngày</option>
+      <option value="custom">Chọn ngày khác...</option>
+    `;
+    
+    select.innerHTML = optionsHtml;
+    const exists = Array.from(select.options).some(o => o.value === curVal);
+    select.value = exists ? curVal : 'today';
+  } catch (e) {
+    console.warn('Lỗi tải danh sách ngày:', e);
+  }
+}
+
+function setupReceptionDateFilter() {
+  const select = document.getElementById('reception-date-filter');
+  const customInput = document.getElementById('reception-custom-date');
+  if (!select) return;
+
+  select.addEventListener('change', async () => {
+    const val = select.value;
+    if (val === 'custom') {
+      if (customInput) {
+        customInput.style.display = 'inline-block';
+        customInput.focus();
+      }
+    } else {
+      if (customInput) customInput.style.display = 'none';
+      state.filterDate = val;
+      await loadDashboardData();
+    }
+  });
+
+  if (customInput) {
+    customInput.addEventListener('change', async () => {
+      if (customInput.value) {
+        state.filterDate = customInput.value;
+        await loadDashboardData();
+      }
+    });
+  }
+}
+
 function setupModal() {
   const modal = document.getElementById('modal-patient');
   const btnOpen = document.getElementById('btn-open-new-patient');
@@ -367,6 +456,7 @@ function setupModal() {
       showToast(`Đã cấp số thứ tự #${appData.queue_number} cho bệnh nhân ${name}!`, 'success');
       modal.classList.remove('open');
       form.reset();
+      await loadAvailableDates();
       await loadDashboardData();
     } catch (err) {
       showToast('Lỗi: ' + err.message, 'error');

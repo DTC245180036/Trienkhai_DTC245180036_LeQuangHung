@@ -222,33 +222,60 @@ app.post('/auth/login', async (req, res) => {
 // 6. DASHBOARD & STATS API (FOR ADMIN)
 // ==========================================
 app.get('/stats', async (req, res) => {
+  const { date } = req.query;
   try {
     const totalPatients = await pool.query('SELECT count(*) FROM patients');
-    const todayAppointments = await pool.query('SELECT count(*) FROM appointments WHERE appointment_date = CURRENT_DATE');
-    const waitingQueue = await pool.query("SELECT count(*) FROM appointments WHERE status = 'WAITING'");
-    const completedQueue = await pool.query("SELECT count(*) FROM appointments WHERE status = 'COMPLETED'");
     
-    // Doanh thu thu được trong ngày hôm nay
-    const todayRevenue = await pool.query(`
-      SELECT COALESCE(SUM(total_amount), 0) as total 
-      FROM invoices 
-      WHERE payment_status = 'PAID' AND DATE(created_at) = CURRENT_DATE
-    `);
-
     // Tổng doanh thu thực thu tích lũy toàn hệ thống
-    const totalRevenue = await pool.query(`
+    const totalRevenueRes = await pool.query(`
       SELECT COALESCE(SUM(total_amount), 0) as total 
       FROM invoices 
       WHERE payment_status = 'PAID'
     `);
+    const totalRevenue = parseFloat(totalRevenueRes.rows[0].total);
+
+    let waitingQuery = "SELECT count(*) FROM appointments WHERE status = 'WAITING'";
+    let completedQuery = "SELECT count(*) FROM appointments WHERE status = 'COMPLETED'";
+    let appCountQuery = "SELECT count(*) FROM appointments";
+    let revQuery = `
+      SELECT COALESCE(SUM(i.total_amount), 0) as total 
+      FROM invoices i 
+      JOIN appointments a ON i.appointment_id = a.id 
+      WHERE i.payment_status = 'PAID'
+    `;
+    const params = [];
+
+    if (date === 'all') {
+      // Lấy toàn bộ lịch sử không giới hạn ngày
+    } else if (date && date !== 'today') {
+      params.push(date);
+      waitingQuery += ` AND appointment_date = $1`;
+      completedQuery += ` AND appointment_date = $1`;
+      appCountQuery += ` WHERE appointment_date = $1`;
+      revQuery += ` AND a.appointment_date = $1`;
+    } else {
+      // Mặc định hoặc 'today': ngày hôm nay
+      waitingQuery += ` AND (appointment_date = CURRENT_DATE OR status = 'WAITING')`;
+      completedQuery += ` AND appointment_date = CURRENT_DATE`;
+      appCountQuery += ` WHERE appointment_date = CURRENT_DATE`;
+      revQuery += ` AND (a.appointment_date = CURRENT_DATE OR DATE(i.created_at) = CURRENT_DATE)`;
+    }
+
+    const waitingQueue = await pool.query(waitingQuery, params);
+    const completedQueue = await pool.query(completedQuery, params);
+    const dateAppointments = await pool.query(appCountQuery, params);
+    const dateRevenue = await pool.query(revQuery, params);
 
     res.json({
       total_patients: parseInt(totalPatients.rows[0].count, 10),
-      today_appointments: parseInt(todayAppointments.rows[0].count, 10),
+      selected_date: date || 'today',
+      date_appointments: parseInt(dateAppointments.rows[0].count, 10),
+      today_appointments: parseInt(dateAppointments.rows[0].count, 10),
       waiting_queue: parseInt(waitingQueue.rows[0].count, 10),
       completed_queue: parseInt(completedQueue.rows[0].count, 10),
-      today_revenue: parseFloat(todayRevenue.rows[0].total),
-      total_revenue: parseFloat(totalRevenue.rows[0].total)
+      today_revenue: parseFloat(dateRevenue.rows[0].total),
+      date_revenue: parseFloat(dateRevenue.rows[0].total),
+      total_revenue: totalRevenue
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -394,6 +421,20 @@ app.post('/patients', async (req, res) => {
 // ==========================================
 // 9. APPOINTMENTS & QUEUE (TIẾP NHẬN & CẤP SỐ)
 // ==========================================
+// Lấy danh sách các ngày có lịch khám bệnh phục vụ bộ lọc thời gian
+app.get('/appointments/dates', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT to_char(appointment_date, 'YYYY-MM-DD') as date
+      FROM appointments
+      ORDER BY date DESC
+    `);
+    res.json(result.rows.map(r => r.date));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/appointments', async (req, res) => {
   const { date, status, doctor_id } = req.query;
   try {
@@ -412,7 +453,11 @@ app.get('/appointments', async (req, res) => {
     const params = [];
 
     if (date) {
-      if (date !== 'all') {
+      if (date === 'all') {
+        // Lấy tất cả các ngày trong lịch sử
+      } else if (date === 'today') {
+        query += ` AND (a.appointment_date = CURRENT_DATE OR a.status IN ('WAITING', 'IN_PROGRESS'))`;
+      } else {
         params.push(date);
         query += ` AND a.appointment_date = $${params.length}`;
       }
