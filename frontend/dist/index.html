@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hệ Thống Quản Lý Phòng Khám (HMS) - Triển Khai & Quản Trị Hệ Thống</title>
-  <link rel="stylesheet" href="styles.css?v=6.5">
+  <link rel="stylesheet" href="styles.css?v=6.6">
 </head>
 <body>
 
@@ -53,15 +53,16 @@
 
       <!-- DANH SÁCH TÀI KHOẢN MẪU ĐỂ CHỌN NHANH KHI DEMO BẢO VỆ ĐỒ ÁN -->
       <div class="quick-accounts-section">
+        <!-- Nhóm 1: Quản trị & Hành chính -->
         <div class="quick-accounts-title">
-          <span>⚡ Chọn nhanh tài khoản mẫu (Demo Báo cáo):</span>
+          <span>👑 Cán Bộ Quản Trị & Nghiệp Vụ Hành Chính:</span>
         </div>
-        <div class="quick-accounts-grid">
+        <div class="quick-accounts-grid" style="grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px;">
           <button type="button" class="quick-acc-btn" onclick="quickLogin('admin', '123456')">
             <span class="acc-icon">👑</span>
             <div>
-              <div class="acc-title">Quản Trị Viên</div>
-              <div class="acc-desc">Toàn quyền / DevOps</div>
+              <div class="acc-title">Quản Trị</div>
+              <div class="acc-desc">Toàn quyền DevOps</div>
             </div>
           </button>
           <button type="button" class="quick-acc-btn" onclick="quickLogin('letan01', '123456')">
@@ -71,18 +72,46 @@
               <div class="acc-desc">Tiếp nhận & Cấp số</div>
             </div>
           </button>
-          <button type="button" class="quick-acc-btn" onclick="quickLogin('bacsi_nam', '123456')">
-            <span class="acc-icon">🩺</span>
-            <div>
-              <div class="acc-title">Bác Sĩ Nam</div>
-              <div class="acc-desc">Khám bệnh & Kê đơn</div>
-            </div>
-          </button>
           <button type="button" class="quick-acc-btn" onclick="quickLogin('thungan01', '123456')">
             <span class="acc-icon">💳</span>
             <div>
               <div class="acc-title">Thu Ngân</div>
               <div class="acc-desc">Viện phí & Hóa đơn</div>
+            </div>
+          </button>
+        </div>
+
+        <!-- Nhóm 2: 4 Bác Sĩ Khám theo Chuyên Khoa Riêng Biệt -->
+        <div class="quick-accounts-title">
+          <span>🩺 4 Bác Sĩ Khám theo Chuyên Khoa Riêng Biệt:</span>
+        </div>
+        <div class="quick-accounts-grid" style="grid-template-columns: 1fr 1fr; gap: 8px;">
+          <button type="button" class="quick-acc-btn" onclick="quickLogin('bacsi_nam', '123456')">
+            <span class="acc-icon">🩺</span>
+            <div>
+              <div class="acc-title">BS. Trần Văn Nam</div>
+              <div class="acc-desc">Khoa Nội Tổng Quát (P.102)</div>
+            </div>
+          </button>
+          <button type="button" class="quick-acc-btn" onclick="quickLogin('bacsi_hoa', '123456')">
+            <span class="acc-icon">🩺</span>
+            <div>
+              <div class="acc-title">ThS.BS. Lê Thị Mai Hoa</div>
+              <div class="acc-desc">Khoa Tai Mũi Họng (P.201)</div>
+            </div>
+          </button>
+          <button type="button" class="quick-acc-btn" onclick="quickLogin('bacsi_long', '123456')">
+            <span class="acc-icon">🩺</span>
+            <div>
+              <div class="acc-title">BS. Nguyễn Hoàng Long</div>
+              <div class="acc-desc">Khoa Nhi & Hô Hấp (P.105)</div>
+            </div>
+          </button>
+          <button type="button" class="quick-acc-btn" onclick="quickLogin('bacsi_tuan', '123456')">
+            <span class="acc-icon">🩺</span>
+            <div>
+              <div class="acc-title">BS. Phạm Minh Tuấn</div>
+              <div class="acc-desc">Khoa CĐHA (X-quang, Siêu âm)</div>
             </div>
           </button>
         </div>
@@ -641,6 +670,6 @@
   <!-- TOAST NOTIFICATIONS -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script src="app.js?v=6.5"></script>
+  <script src="app.js?v=6.6"></script>
 </body>
 </html>

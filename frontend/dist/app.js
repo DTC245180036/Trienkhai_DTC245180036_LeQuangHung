@@ -243,7 +243,7 @@ async function performLogin(username, password) {
   }
 }
 
-function applyLoggedInState(user) {
+async function applyLoggedInState(user) {
   state.currentUser = user;
   state.currentRole = user.role;
 
@@ -277,10 +277,19 @@ function applyLoggedInState(user) {
   // 4. Thực thi phân quyền (RBAC Enforcement): Chỉ cho phép xem tab được cấp quyền
   applyRolePermissions(user.role);
 
-  // 5. Tải dữ liệu ban đầu
-  loadInitialCatalogs();
-  loadAvailableDates();
-  loadDashboardData();
+  // 5. Tải dữ liệu ban đầu và tự động khớp bộ lọc với bác sĩ đăng nhập
+  await loadInitialCatalogs();
+  if (user.role === 'DOCTOR' && user.doctor) {
+    const filterSelect = document.getElementById('doctor-filter-select');
+    if (filterSelect) {
+      filterSelect.value = String(user.doctor.doctor_id);
+    }
+  }
+  await loadAvailableDates();
+  await loadDashboardData();
+  if (user.role === 'DOCTOR') {
+    await loadDoctorQueue();
+  }
 }
 
 function performLogout() {
