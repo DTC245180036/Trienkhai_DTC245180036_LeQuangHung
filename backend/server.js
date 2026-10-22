@@ -889,8 +889,11 @@ app.post('/medical-records', async (req, res) => {
     prescriptions = [] // [{ medicine_id, quantity, dosage_instructions }]
   } = req.body;
 
-  if (!appointment_id || !diagnosis) {
-    return res.status(400).json({ error: 'Mã lịch hẹn và Chẩn đoán là bắt buộc' });
+  const cleanDiagnosis = (diagnosis || '').toString().trim();
+  if (!appointment_id || !cleanDiagnosis || cleanDiagnosis.length < 3) {
+    return res.status(400).json({ 
+      error: 'Kết luận chẩn đoán bệnh lý không hợp lệ! Vui lòng nhập chẩn đoán cụ thể (tối thiểu 3 ký tự, ví dụ: "Viêm họng cấp", "Cảm cúm").' 
+    });
   }
 
   // 1. Kiểm tra định dạng huyết áp (Tâm thu / Tâm trương)
@@ -913,13 +916,21 @@ app.post('/medical-records', async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // 2. Kiểm tra phân quyền: Ca khám này có thuộc về bác sĩ này không
-    const appRes = await client.query('SELECT doctor_id FROM appointments WHERE id = $1', [appointment_id]);
+    // 2. Kiểm tra phân quyền và trạng thái: Bệnh nhân bắt buộc phải được mời vào phòng (IN_PROGRESS)
+    const appRes = await client.query('SELECT doctor_id, status FROM appointments WHERE id = $1', [appointment_id]);
     if (appRes.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Không tìm thấy ca khám bệnh' });
     }
-    const assignedDoctorId = appRes.rows[0].doctor_id;
+    const appRow = appRes.rows[0];
+    if (appRow.status === 'WAITING') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        error: 'Bệnh nhân đang ở trạng thái "Chờ khám" (chưa được gọi vào phòng)! Bác sĩ vui lòng bấm nút "Mời Vào Phòng & Bắt Đầu Khám" trước khi hoàn tất bệnh án và kê đơn.' 
+      });
+    }
+
+    const assignedDoctorId = appRow.doctor_id;
     if (!doctor_id) {
       await client.query('ROLLBACK');
       return res.status(403).json({ 

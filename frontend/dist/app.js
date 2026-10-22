@@ -1243,9 +1243,15 @@ window.selectDoctorPatient = async (appointmentId, force = false) => {
     if (btnStartExam) btnStartExam.style.display = 'none';
   }
 
-  // XỬ LÝ PHÂN QUYỀN CHẾ ĐỘ GIÁM SÁT CỦA ADMIN VS CHUYÊN MÔN CỦA BÁC SĨ
+  // XỬ LÝ PHÂN QUYỀN VÀ TRẠNG THÁI KHÁM:
   const isAdmin = state.currentRole === 'ADMIN';
+  const isWaiting = appointment.status === 'WAITING';
+  const isInProgress = appointment.status === 'IN_PROGRESS';
+  const isCompleted = appointment.status === 'COMPLETED';
+
   let adminBanner = document.getElementById('admin-doctor-monitor-banner');
+  let waitingBanner = document.getElementById('waiting-doctor-banner');
+
   if (isAdmin) {
     if (!adminBanner) {
       adminBanner = document.createElement('div');
@@ -1255,6 +1261,7 @@ window.selectDoctorPatient = async (appointmentId, force = false) => {
       form.parentNode.insertBefore(adminBanner, form);
     }
     adminBanner.style.display = 'flex';
+    if (waitingBanner) waitingBanner.style.display = 'none';
 
     // Vô hiệu hóa trường nhập và ẩn các nút tác vụ khám
     document.getElementById('exam-bp').disabled = true;
@@ -1268,10 +1275,34 @@ window.selectDoctorPatient = async (appointmentId, force = false) => {
     const submitBtn = document.getElementById('btn-submit-exam');
     if (submitBtn) submitBtn.style.display = 'none';
     if (btnStartExam) btnStartExam.style.display = 'none';
-  } else {
+  } else if (isWaiting) {
+    // BÁC SĨ NHƯNG BỆNH NHÂN ĐANG Ở SẢNH CHỜ (CHƯA VÀO PHÒNG)
     if (adminBanner) adminBanner.style.display = 'none';
+    if (!waitingBanner) {
+      waitingBanner = document.createElement('div');
+      waitingBanner.id = 'waiting-doctor-banner';
+      waitingBanner.style.cssText = 'background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 12px 16px; border-radius: 8px; margin-bottom: 14px; font-size: 0.86rem; display: flex; align-items: center; justify-content: space-between; gap: 12px; line-height: 1.4;';
+      waitingBanner.innerHTML = '<div>⏳ <strong>Bệnh nhân đang ở sảnh chờ (Chưa vào phòng khám):</strong><br><span style="font-size: 0.8rem; color: #b45309;">Bác sĩ vui lòng bấm nút <strong>"Mời Vào Phòng & Bắt Đầu Khám"</strong> ở góc trên bên phải để gọi bệnh nhân vào trước khi ghi nhận chẩn đoán và kê đơn.</span></div>';
+      form.parentNode.insertBefore(waitingBanner, form);
+    }
+    waitingBanner.style.display = 'flex';
 
-    // Kích hoạt trường nhập cho Bác sĩ
+    // Khóa các trường nhập liệu và nút hoàn tất vì bệnh nhân chưa vào phòng
+    document.getElementById('exam-bp').disabled = true;
+    document.getElementById('exam-temp').disabled = true;
+    document.getElementById('exam-diagnosis').disabled = true;
+    document.getElementById('exam-advice').disabled = true;
+    if (fileInput) fileInput.disabled = true;
+    document.querySelectorAll('input[name="services"]').forEach(cb => cb.disabled = true);
+    const addMedBtn = document.getElementById('btn-add-prescription-row');
+    if (addMedBtn) addMedBtn.style.display = 'none';
+    const submitBtn = document.getElementById('btn-submit-exam');
+    if (submitBtn) submitBtn.style.display = 'none';
+  } else if (isInProgress) {
+    // BÁC SĨ ĐÃ MỜI VÀO PHÒNG (ĐANG KHÁM) -> MỞ KHÓA TOÀN BỘ ĐỂ KHÁM VÀ KÊ ĐƠN
+    if (adminBanner) adminBanner.style.display = 'none';
+    if (waitingBanner) waitingBanner.style.display = 'none';
+
     document.getElementById('exam-bp').disabled = false;
     document.getElementById('exam-temp').disabled = false;
     document.getElementById('exam-diagnosis').disabled = false;
@@ -1282,6 +1313,21 @@ window.selectDoctorPatient = async (appointmentId, force = false) => {
     if (addMedBtn) addMedBtn.style.display = 'inline-block';
     const submitBtn = document.getElementById('btn-submit-exam');
     if (submitBtn) submitBtn.style.display = 'inline-block';
+  } else if (isCompleted) {
+    // ĐÃ KHÁM XONG -> CHẾ ĐỘ XEM LẠI BỆNH ÁN CŨ
+    if (adminBanner) adminBanner.style.display = 'none';
+    if (waitingBanner) waitingBanner.style.display = 'none';
+
+    document.getElementById('exam-bp').disabled = true;
+    document.getElementById('exam-temp').disabled = true;
+    document.getElementById('exam-diagnosis').disabled = true;
+    document.getElementById('exam-advice').disabled = true;
+    if (fileInput) fileInput.disabled = true;
+    document.querySelectorAll('input[name="services"]').forEach(cb => cb.disabled = true);
+    const addMedBtn = document.getElementById('btn-add-prescription-row');
+    if (addMedBtn) addMedBtn.style.display = 'none';
+    const submitBtn = document.getElementById('btn-submit-exam');
+    if (submitBtn) submitBtn.style.display = 'none';
   }
 
   document.getElementById('exam-bp').value = '120/80';
@@ -1414,14 +1460,9 @@ function setupDoctorExamForm() {
         });
 
         state.selectedAppointment.status = 'IN_PROGRESS';
-        const statusBadge = document.getElementById('exam-status-badge');
-        if (statusBadge) {
-          statusBadge.innerText = 'ĐANG KHÁM';
-          statusBadge.className = 'badge badge-in_progress';
-        }
-        btnStartExam.style.display = 'none';
         showToast(`Đã mời bệnh nhân ${state.selectedAppointment.patient_name} (STT #${state.selectedAppointment.queue_number}) vào khám!`, 'success');
 
+        await selectDoctorPatient(state.selectedAppointment.id, true);
         await loadDoctorQueue();
         await loadStats();
       } catch (err) {
@@ -1461,6 +1502,13 @@ function setupDoctorExamForm() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const appointmentId = document.getElementById('exam-appointment-id').value;
+
+    // 0. Bắt buộc bệnh nhân phải ở trạng thái ĐANG KHÁM (đã được mời vào phòng)
+    if (state.selectedAppointment?.status === 'WAITING') {
+      showToast('Bệnh nhân đang ở trạng thái "Chờ khám" (chưa vào phòng)! Bác sĩ vui lòng bấm "Mời Vào Phòng & Bắt Đầu Khám" trước khi hoàn tất bệnh án.', 'warning');
+      return;
+    }
+
     const bpInput = document.getElementById('exam-bp');
     const bp = (bpInput ? bpInput.value : '').trim();
     const tempInput = document.getElementById('exam-temp');
@@ -1485,9 +1533,9 @@ function setupDoctorExamForm() {
       return;
     }
 
-    // 2. Bắt buộc nhập chẩn đoán
-    if (!diagnosis) {
-      showToast('Vui lòng nhập kết luận chẩn đoán bệnh lý trước khi hoàn tất khám!', 'warning');
+    // 2. Bắt buộc nhập chẩn đoán cụ thể (tối thiểu 3 ký tự)
+    if (!diagnosis || diagnosis.length < 3) {
+      showToast('Kết luận chẩn đoán bệnh lý không hợp lệ! Vui lòng nhập chẩn đoán cụ thể (tối thiểu 3 ký tự, ví dụ: "Viêm họng cấp", "Cảm cúm").', 'warning');
       if (diagnosisInput) diagnosisInput.focus();
       return;
     }
