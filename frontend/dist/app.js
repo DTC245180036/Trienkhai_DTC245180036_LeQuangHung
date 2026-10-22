@@ -107,6 +107,12 @@ function switchTab(targetId) {
     pane.style.display = pane.id === targetId ? 'block' : 'none';
   });
 
+  // Đảm bảo nút tiếp nhận bệnh nhân chỉ hiển thị cho nhân viên Lễ Tân
+  const btnNewPatient = document.getElementById('btn-open-new-patient');
+  if (btnNewPatient) {
+    btnNewPatient.style.display = (state.currentRole === 'RECEPTIONIST') ? 'inline-flex' : 'none';
+  }
+
   if (targetId === 'tab-doctor') loadDoctorQueue();
   if (targetId === 'tab-cashier') loadInvoices();
   if (targetId === 'tab-reception') loadAppointments();
@@ -138,6 +144,45 @@ function applyRolePermissions(role) {
       docTabBtn.innerHTML = '🩺 Phòng Khám Bác Sĩ';
       docTabBtn.title = 'Phân hệ chuyên môn khám bệnh & kê đơn dành cho Bác sĩ';
     }
+  }
+
+  // 1.1. Phân quyền nút Tiếp nhận & Cấp số mới: Chỉ LỄ TÂN mới được phép tiếp nhận bệnh nhân!
+  // Quản trị viên và Bác sĩ không có chức năng này (chỉ xem hàng đợi tiếp đón)
+  const btnNewPatient = document.getElementById('btn-open-new-patient');
+  if (btnNewPatient) {
+    btnNewPatient.style.display = (role === 'RECEPTIONIST') ? 'inline-flex' : 'none';
+  }
+
+  // Quản lý Banner Giám sát Tiếp Đón cho Quản trị viên
+  let recepBanner = document.getElementById('admin-reception-monitor-banner');
+  const recepCardHeader = document.querySelector('#tab-reception .card-header');
+  if (role === 'ADMIN') {
+    if (!recepBanner && recepCardHeader) {
+      recepBanner = document.createElement('div');
+      recepBanner.id = 'admin-reception-monitor-banner';
+      recepBanner.style.cssText = 'background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 10px 14px; border-radius: 8px; margin: 10px 0 14px 0; font-size: 0.86rem; display: flex; align-items: center; gap: 8px;';
+      recepBanner.innerHTML = '<span>👁️</span> <div><strong>CHẾ ĐỘ GIÁM SÁT TIẾP ĐÓN (DÀNH CHO QUẢN TRỊ VIÊN):</strong> Quản trị viên chỉ có quyền theo dõi lưu lượng bệnh nhân và hàng đợi. Nghiệp vụ tiếp nhận và cấp số khám thuộc về nhân viên Lễ Tân.</div>';
+      recepCardHeader.parentNode.insertBefore(recepBanner, recepCardHeader.nextSibling);
+    }
+    if (recepBanner) recepBanner.style.display = 'flex';
+  } else {
+    if (recepBanner) recepBanner.style.display = 'none';
+  }
+
+  // Quản lý Banner Giám sát Thu Ngân cho Quản trị viên
+  let cashierBanner = document.getElementById('admin-cashier-monitor-banner');
+  const cashierCardHeader = document.querySelector('#tab-cashier .card-header');
+  if (role === 'ADMIN') {
+    if (!cashierBanner && cashierCardHeader) {
+      cashierBanner = document.createElement('div');
+      cashierBanner.id = 'admin-cashier-monitor-banner';
+      cashierBanner.style.cssText = 'background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 10px 14px; border-radius: 8px; margin: 10px 0 14px 0; font-size: 0.86rem; display: flex; align-items: center; gap: 8px;';
+      cashierBanner.innerHTML = '<span>👁️</span> <div><strong>CHẾ ĐỘ GIÁM SÁT VIỆN PHÍ (DÀNH CHO QUẢN TRỊ VIÊN):</strong> Quản trị viên chỉ đối soát doanh thu, kiểm toán hóa đơn và xuất báo cáo. Quyền thu tiền mặt / QR thuộc về nhân viên Thu Ngân.</div>';
+      cashierCardHeader.parentNode.insertBefore(cashierBanner, cashierCardHeader.nextSibling);
+    }
+    if (cashierBanner) cashierBanner.style.display = 'flex';
+  } else {
+    if (cashierBanner) cashierBanner.style.display = 'none';
   }
 
   // 2. Phân quyền hiển thị Thống kê Tài chính (Doanh thu)
@@ -704,6 +749,10 @@ function setupModal() {
   }
 
   btnOpen.addEventListener('click', () => {
+    if (state.currentRole === 'ADMIN') {
+      showToast('Tài khoản Quản trị viên chỉ có quyền giám sát, không thể tiếp nhận bệnh nhân!', 'warning');
+      return;
+    }
     populateDoctorDropdown();
     if (statusBanner) statusBanner.style.display = 'none';
     modal.classList.add('open');
@@ -719,6 +768,11 @@ function setupModal() {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (state.currentRole === 'ADMIN') {
+      showToast('Tài khoản Quản trị viên chỉ có quyền giám sát, không thể tiếp nhận bệnh nhân!', 'warning');
+      modal.classList.remove('open');
+      return;
+    }
     const rawName = (document.getElementById('p-name').value || '').trim();
     const phone = (document.getElementById('p-phone').value || '').trim();
     const idcard = (document.getElementById('p-idcard').value || '').trim();
@@ -814,7 +868,7 @@ function setupModal() {
       const appRes = await fetch(`${API_BASE}/appointments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patient_id: patData.id, doctor_id: doctorId, symptoms })
+        body: JSON.stringify({ patient_id: patData.id, doctor_id: doctorId, symptoms, role: state.currentRole })
       });
       if (!appRes.ok) {
         const errJson = await appRes.json().catch(() => ({}));
@@ -1501,6 +1555,10 @@ function setupDoctorExamForm() {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (state.currentRole === 'ADMIN') {
+      showToast('Tài khoản Quản trị viên chỉ có quyền giám sát, không thể thực hiện khám và kê đơn!', 'warning');
+      return;
+    }
     const appointmentId = document.getElementById('exam-appointment-id').value;
 
     // 0. Bắt buộc bệnh nhân phải ở trạng thái ĐANG KHÁM (đã được mời vào phòng)
@@ -1590,7 +1648,8 @@ function setupDoctorExamForm() {
           diagnosis,
           doctor_advice: advice,
           services: selectedServices,
-          prescriptions
+          prescriptions,
+          role: state.currentRole
         })
       });
 
@@ -1765,42 +1824,66 @@ async function loadInvoices() {
       return;
     }
 
-    tbody.innerHTML = state.invoices.map(inv => `
-      <tr>
-        <td><strong>#HD-${String(inv.id).padStart(4, '0')}</strong></td>
-        <td><strong style="color: var(--primary);">#${String(inv.queue_number).padStart(2, '0')}</strong></td>
-        <td><strong>${inv.patient_name}</strong><br><span style="font-size: 0.75rem; color: var(--text-muted);">${inv.patient_phone || ''}</span></td>
-        <td>${inv.doctor_name || 'BS Phụ trách'}</td>
-        <td><strong style="color: #047857; font-size: 1.05rem;">${new Intl.NumberFormat('vi-VN').format(inv.total_amount)} đ</strong></td>
-        <td><span style="font-size: 0.85rem;">${inv.payment_method === 'TRANSFER' ? 'Chuyển khoản' : 'Tiền mặt'}</span></td>
-        <td>
-          <span class="badge ${inv.payment_status === 'PAID' ? 'badge-paid' : 'badge-unpaid'}">
-            ${inv.payment_status === 'PAID' ? 'Đã Thanh Toán' : 'Chưa Thu'}
-          </span>
-        </td>
-        <td style="text-align: right;">
-          ${inv.payment_status !== 'PAID' ? `
+    tbody.innerHTML = state.invoices.map(inv => {
+      let actionHtml = '';
+      if (inv.payment_status !== 'PAID') {
+        if (state.currentRole === 'CASHIER') {
+          actionHtml = `
             <button class="btn btn-success btn-sm" onclick="payInvoice(${inv.id}, 'CASH')">💵 Thu Tiền</button>
             <button class="btn btn-primary btn-sm" onclick="payInvoice(${inv.id}, 'TRANSFER')">💳 QR Pay</button>
-          ` : `
-            <button class="btn btn-secondary btn-sm" onclick="printInvoice(${inv.id})">🖨️ In Phiếu</button>
-          `}
-        </td>
-      </tr>
-    `).join('');
+          `;
+        } else {
+          actionHtml = `
+            <span class="badge badge-unpaid" style="font-size: 0.75rem; padding: 5px 10px; background: #fffbeb; color: #b45309; border: 1px solid #fde68a; display: inline-flex; align-items: center; gap: 4px;" title="Quản trị viên chỉ có quyền giám sát đối soát, không trực tiếp thu tiền">
+              ⏳ Chờ Thu Ngân thu
+            </span>
+          `;
+        }
+      } else {
+        actionHtml = `
+          <button class="btn btn-secondary btn-sm" onclick="printInvoice(${inv.id})">🖨️ In Phiếu</button>
+        `;
+      }
+
+      return `
+        <tr>
+          <td><strong>#HD-${String(inv.id).padStart(4, '0')}</strong></td>
+          <td><strong style="color: var(--primary);">#${String(inv.queue_number).padStart(2, '0')}</strong></td>
+          <td><strong>${inv.patient_name}</strong><br><span style="font-size: 0.75rem; color: var(--text-muted);">${inv.patient_phone || ''}</span></td>
+          <td>${inv.doctor_name || 'BS Phụ trách'}</td>
+          <td><strong style="color: #047857; font-size: 1.05rem;">${new Intl.NumberFormat('vi-VN').format(inv.total_amount)} đ</strong></td>
+          <td><span style="font-size: 0.85rem;">${inv.payment_method === 'TRANSFER' ? 'Chuyển khoản' : 'Tiền mặt'}</span></td>
+          <td>
+            <span class="badge ${inv.payment_status === 'PAID' ? 'badge-paid' : 'badge-unpaid'}">
+              ${inv.payment_status === 'PAID' ? 'Đã Thanh Toán' : 'Chưa Thu'}
+            </span>
+          </td>
+          <td style="text-align: right; white-space: nowrap;">
+            ${actionHtml}
+          </td>
+        </tr>
+      `;
+    }).join('');
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--danger); padding: 20px;">Lỗi: ${err.message}</td></tr>`;
   }
 }
 
 window.payInvoice = async (invoiceId, method) => {
+  if (state.currentRole !== 'CASHIER') {
+    showToast('Tài khoản Quản trị viên chỉ có quyền giám sát, không được trực tiếp thu tiền thay Thu Ngân!', 'warning');
+    return;
+  }
   try {
     const res = await fetch(`${API_BASE}/invoices/${invoiceId}/pay`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ payment_method: method })
+      body: JSON.stringify({ payment_method: method, role: state.currentRole })
     });
-    if (!res.ok) throw new Error('Không thể cập nhật hóa đơn');
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Không thể cập nhật hóa đơn');
+    }
     showToast(`Đã xác nhận thu tiền thành công cho hóa đơn #HD-${invoiceId}!`, 'success');
     await loadInvoices();
     await loadStats();

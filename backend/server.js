@@ -710,7 +710,10 @@ app.get('/appointments', async (req, res) => {
 
 // Tiếp nhận bệnh nhân & tự động cấp số thứ tự (Sử dụng Redis Atomic Counter & Fallback DB)
 app.post('/appointments', async (req, res) => {
-  const { patient_id, doctor_id, symptoms } = req.body;
+  const { patient_id, doctor_id, symptoms, role } = req.body;
+  if (role && role !== 'RECEPTIONIST') {
+    return res.status(403).json({ error: 'Chỉ nhân viên Lễ Tân mới có quyền tiếp nhận và cấp số thứ tự khám cho bệnh nhân!' });
+  }
   if (!patient_id || !doctor_id) {
     return res.status(400).json({ error: 'Cần chọn bệnh nhân và bác sĩ' });
   }
@@ -885,9 +888,16 @@ app.post('/medical-records', async (req, res) => {
     diagnosis,
     doctor_advice,
     doctor_id, // ID bác sĩ đang thực hiện khám
+    role, // Vai trò thực hiện
     services = [], // [{ service_id, result_text }]
     prescriptions = [] // [{ medicine_id, quantity, dosage_instructions }]
   } = req.body;
+
+  if (role && role !== 'DOCTOR') {
+    return res.status(403).json({ 
+      error: 'Chỉ Bác sĩ phụ trách có chứng chỉ hành nghề mới có quyền hoàn tất khám bệnh và kê đơn thuốc cho bệnh nhân!' 
+    });
+  }
 
   const cleanDiagnosis = (diagnosis || '').toString().trim();
   if (!appointment_id || !cleanDiagnosis || cleanDiagnosis.length < 3) {
@@ -1050,7 +1060,10 @@ app.get('/invoices', async (req, res) => {
 // Xác nhận thanh toán hóa đơn
 app.post('/invoices/:id/pay', async (req, res) => {
   const { id } = req.params;
-  const { payment_method = 'CASH' } = req.body;
+  const { payment_method = 'CASH', role } = req.body;
+  if (role && role !== 'CASHIER') {
+    return res.status(403).json({ error: 'Chỉ nhân viên Thu Ngân mới có thẩm quyền thực hiện thu tiền và xuất hóa đơn viện phí!' });
+  }
   try {
     const result = await pool.query(`
       UPDATE invoices
