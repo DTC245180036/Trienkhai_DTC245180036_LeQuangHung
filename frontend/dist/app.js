@@ -126,7 +126,19 @@ function applyRolePermissions(role) {
     }
   });
 
-  // 2. Chuyển ngay đến tab phân hệ của vai trò đó
+  // 2. Phân quyền hiển thị Thống kê Tài chính (Doanh thu)
+  // Bác sĩ và Tiếp tân chỉ phụ trách chuyên môn y tế, hoàn toàn KHÔNG xem doanh thu tiền nong!
+  // Chỉ Quản trị viên (ADMIN) và Thu ngân (CASHIER) mới được xem Doanh thu.
+  const revCard = document.getElementById('card-stat-revenue');
+  if (revCard) {
+    if (role === 'ADMIN' || role === 'CASHIER') {
+      revCard.style.display = 'flex';
+    } else {
+      revCard.style.display = 'none';
+    }
+  }
+
+  // 3. Chuyển ngay đến tab phân hệ của vai trò đó
   const defaultTabMap = {
     RECEPTIONIST: 'tab-reception',
     DOCTOR: 'tab-doctor',
