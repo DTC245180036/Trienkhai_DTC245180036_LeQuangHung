@@ -254,10 +254,10 @@ app.get('/stats', async (req, res) => {
       appCountQuery += ` WHERE appointment_date = $1`;
       revQuery += ` AND a.appointment_date = $1`;
     } else {
-      // Mặc định hoặc 'today': ngày hôm nay
+      // Mặc định hoặc 'today': tính các ca của ngày hôm nay hoặc được hoàn tất khám/thu tiền trong ngày hôm nay
       waitingQuery += ` AND (appointment_date = CURRENT_DATE OR status = 'WAITING')`;
-      completedQuery += ` AND appointment_date = CURRENT_DATE`;
-      appCountQuery += ` WHERE appointment_date = CURRENT_DATE`;
+      completedQuery += ` AND (appointment_date = CURRENT_DATE OR id IN (SELECT appointment_id FROM medical_records WHERE DATE(created_at) = CURRENT_DATE) OR id IN (SELECT appointment_id FROM invoices WHERE DATE(created_at) = CURRENT_DATE AND payment_status = 'PAID'))`;
+      appCountQuery += ` WHERE (appointment_date = CURRENT_DATE OR id IN (SELECT appointment_id FROM medical_records WHERE DATE(created_at) = CURRENT_DATE) OR id IN (SELECT appointment_id FROM invoices WHERE DATE(created_at) = CURRENT_DATE))`;
       revQuery += ` AND (a.appointment_date = CURRENT_DATE OR DATE(i.created_at) = CURRENT_DATE)`;
     }
 
@@ -354,8 +354,29 @@ app.get('/patients', async (req, res) => {
 
 app.post('/patients', async (req, res) => {
   const { full_name, phone, identity_card, dob, gender, address, medical_history } = req.body;
-  if (!full_name || !identity_card) {
-    return res.status(400).json({ error: 'Họ tên và Số CCCD/CMND là bắt buộc' });
+  
+  if (!full_name || !full_name.trim()) {
+    return res.status(400).json({ error: 'Họ và tên bệnh nhân là bắt buộc' });
+  }
+
+  // Làm sạch dữ liệu đầu vào
+  const cleanPhone = (phone || '').toString().trim();
+  const cleanIdCard = (identity_card || '').toString().trim();
+
+  // Kiểm tra chuẩn CCCD/CMND Việt Nam (12 số CCCD gắn chip/mã vạch hoặc 9 số CMND cũ, chỉ gồm chữ số)
+  const cccdRegex = /^\d{9}$|^\d{12}$/;
+  if (!cleanIdCard || !cccdRegex.test(cleanIdCard)) {
+    return res.status(400).json({ 
+      error: 'Số CCCD/CMND không hợp lệ! Vui lòng nhập đúng 12 chữ số CCCD (hoặc 9 chữ số CMND), chỉ bao gồm chữ số và không nhập ký tự bừa bãi.' 
+    });
+  }
+
+  // Kiểm tra chuẩn Số điện thoại di động Việt Nam (10 số, bắt đầu bằng 03, 05, 07, 08, 09)
+  const phoneRegex = /^0[35789]\d{8}$/;
+  if (!cleanPhone || !phoneRegex.test(cleanPhone)) {
+    return res.status(400).json({ 
+      error: 'Số điện thoại không hợp lệ! Vui lòng nhập chuẩn số điện thoại di động Việt Nam gồm đúng 10 chữ số (bắt đầu bằng 03, 05, 07, 08 hoặc 09).' 
+    });
   }
 
   const client = await pool.connect();
@@ -368,7 +389,7 @@ app.post('/patients', async (req, res) => {
       FROM patients p 
       LEFT JOIN users u ON p.user_id = u.id 
       WHERE p.identity_card = $1
-    `, [identity_card]);
+    `, [cleanIdCard]);
 
     if (existingPat.rows.length > 0) {
       const pat = existingPat.rows[0];
@@ -376,7 +397,7 @@ app.post('/patients', async (req, res) => {
       if (pat.user_id) {
         await client.query(`
           UPDATE users SET full_name = $1, phone = COALESCE(NULLIF($2, ''), phone) WHERE id = $3
-        `, [full_name, phone || '', pat.user_id]);
+        `, [full_name.trim(), cleanPhone, pat.user_id]);
       }
       await client.query(`
         UPDATE patients 
@@ -388,16 +409,16 @@ app.post('/patients', async (req, res) => {
       `, [dob || null, gender || '', address || '', medical_history || '', pat.id]);
 
       await client.query('COMMIT');
-      return res.status(200).json({ ...pat, full_name, phone: phone || pat.phone });
+      return res.status(200).json({ ...pat, full_name: full_name.trim(), phone: cleanPhone || pat.phone });
     }
 
     // 2. Nếu là bệnh nhân mới: tạo user và profile bệnh nhân
-    const username = 'pat_' + (identity_card || Date.now());
+    const username = 'pat_' + cleanIdCard;
     const userRes = await client.query(`
       INSERT INTO users (username, password_hash, full_name, phone, role_id)
       VALUES ($1, 'scrypt:default', $2, $3, 4)
       RETURNING id
-    `, [username, full_name, phone || '']);
+    `, [username, full_name.trim(), cleanPhone]);
 
     const userId = userRes.rows[0].id;
 
@@ -406,10 +427,10 @@ app.post('/patients', async (req, res) => {
       INSERT INTO patients (user_id, identity_card, dob, gender, address, medical_history)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
-    `, [userId, identity_card, dob || '2000-01-01', gender || 'Nam', address || '', medical_history || '']);
+    `, [userId, cleanIdCard, dob || '2000-01-01', gender || 'Nam', address || '', medical_history || '']);
 
     await client.query('COMMIT');
-    res.status(201).json({ ...patientRes.rows[0], full_name, phone });
+    res.status(201).json({ ...patientRes.rows[0], full_name: full_name.trim(), phone: cleanPhone });
   } catch (err) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: 'Lỗi thêm bệnh nhân: ' + err.message });
@@ -456,14 +477,24 @@ app.get('/appointments', async (req, res) => {
       if (date === 'all') {
         // Lấy tất cả các ngày trong lịch sử
       } else if (date === 'today') {
-        query += ` AND (a.appointment_date = CURRENT_DATE OR a.status IN ('WAITING', 'IN_PROGRESS'))`;
+        query += ` AND (
+          a.appointment_date = CURRENT_DATE 
+          OR a.status IN ('WAITING', 'IN_PROGRESS')
+          OR a.id IN (SELECT appointment_id FROM medical_records WHERE DATE(created_at) = CURRENT_DATE)
+          OR a.id IN (SELECT appointment_id FROM invoices WHERE DATE(created_at) = CURRENT_DATE)
+        )`;
       } else {
         params.push(date);
         query += ` AND a.appointment_date = $${params.length}`;
       }
     } else {
-      // Mặc định ngày hôm nay hoặc các bệnh nhân đang chờ khám / đang khám
-      query += ` AND (a.appointment_date = CURRENT_DATE OR a.status IN ('WAITING', 'IN_PROGRESS'))`;
+      // Mặc định ngày hôm nay hoặc các bệnh nhân đang chờ khám / đang khám / đã khám hoặc thanh toán hôm nay
+      query += ` AND (
+        a.appointment_date = CURRENT_DATE 
+        OR a.status IN ('WAITING', 'IN_PROGRESS')
+        OR a.id IN (SELECT appointment_id FROM medical_records WHERE DATE(created_at) = CURRENT_DATE)
+        OR a.id IN (SELECT appointment_id FROM invoices WHERE DATE(created_at) = CURRENT_DATE)
+      )`;
     }
 
     if (status) {

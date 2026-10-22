@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hệ Thống Quản Lý Phòng Khám (HMS) - Triển Khai & Quản Trị Hệ Thống</title>
-  <link rel="stylesheet" href="styles.css?v=6.2">
+  <link rel="stylesheet" href="styles.css?v=6.3">
 </head>
 <body>
 
@@ -244,7 +244,13 @@
 
             <!-- Chỉ định dịch vụ cận lâm sàng -->
             <div class="form-group" style="background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid var(--border);">
-              <label style="color: var(--primary-dark); font-weight: 700;">🔬 Chỉ định Cận lâm sàng (Xét nghiệm / Hình ảnh):</label>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+                <label style="color: var(--primary-dark); font-weight: 700; margin-bottom: 0;">🔬 Chỉ định Cận lâm sàng (Xét nghiệm / Siêu âm / X-quang):</label>
+                <span style="font-size: 0.75rem; background: #e0f2fe; color: #0284c7; padding: 2px 8px; border-radius: 4px; font-weight: 600;">🤝 Bác sĩ tư vấn & bệnh nhân đồng thuận</span>
+              </div>
+              <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 8px;">
+                💡 Quy chuẩn y khoa: Bác sĩ tư vấn mục đích và chi phí, bệnh nhân đồng ý mới chỉ định thực hiện.
+              </p>
               <div id="cls-services-checkboxes" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
                 <!-- Render động -->
               </div>
@@ -271,6 +277,17 @@
               </div>
               <div id="prescription-container" style="display: flex; flex-direction: column; gap: 8px;">
                 <!-- Dòng kê thuốc -->
+              </div>
+            </div>
+
+            <!-- Tạm tính chi phí ca khám -->
+            <div id="exam-live-estimate" style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 12px 16px; margin-top: 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <span style="font-size: 0.85rem; font-weight: 600; color: #065f46;">💰 Chi phí tạm tính (Khám + CLS + Thuốc):</span>
+                <div style="font-size: 0.75rem; color: #047857;" id="estimate-breakdown">Tiền khám: 150.000 đ | CLS: 0 đ | Thuốc: 0 đ</div>
+              </div>
+              <div style="font-size: 1.15rem; font-weight: 800; color: #059669;" id="estimate-total-amount">
+                150.000 đ
               </div>
             </div>
 
@@ -479,18 +496,20 @@
         <div class="form-grid">
           <div class="form-group">
             <label>Họ và Tên Bệnh Nhân *</label>
-            <input type="text" class="form-control" id="p-name" placeholder="VD: Nguyễn Văn Bình" required>
+            <input type="text" class="form-control" id="p-name" placeholder="VD: Lê Văn Minh" required>
           </div>
           <div class="form-group">
-            <label>Số Điện Thoại</label>
-            <input type="tel" class="form-control" id="p-phone" placeholder="VD: 0988123456">
+            <label>Số Điện Thoại (10 số) *</label>
+            <input type="tel" class="form-control" id="p-phone" placeholder="VD: 0988123456" required maxlength="10" inputmode="numeric">
+            <small style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 3px;">Chuẩn ĐT Việt Nam: đúng 10 số (đầu 03, 05, 07, 08, 09)</small>
           </div>
         </div>
 
         <div class="form-grid">
           <div class="form-group">
-            <label>Số CCCD / CMND *</label>
-            <input type="text" class="form-control" id="p-idcard" placeholder="VD: 001201004567" required>
+            <label>Số CCCD / CMND (12 số) *</label>
+            <input type="text" class="form-control" id="p-idcard" placeholder="VD: 001201004567" required maxlength="12" inputmode="numeric">
+            <small style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 3px;">Đúng 12 số CCCD (hoặc 9 số CMND), chỉ gồm chữ số</small>
           </div>
           <div class="form-group">
             <label>Ngày Sinh</label>
@@ -538,6 +557,6 @@
   <!-- TOAST NOTIFICATIONS -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script src="app.js?v=6.2"></script>
+  <script src="app.js?v=6.3"></script>
 </body>
 </html>

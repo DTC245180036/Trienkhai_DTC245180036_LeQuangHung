@@ -410,6 +410,21 @@ function setupModal() {
   const btnCancel = document.getElementById('btn-cancel-modal');
   const form = document.getElementById('form-new-patient');
 
+  const inputPhone = document.getElementById('p-phone');
+  const inputIdCard = document.getElementById('p-idcard');
+
+  // Tự động chặn và loại bỏ ký tự không phải số ngay khi gõ/paste
+  if (inputPhone) {
+    inputPhone.addEventListener('input', (e) => {
+      e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
+    });
+  }
+  if (inputIdCard) {
+    inputIdCard.addEventListener('input', (e) => {
+      e.target.value = e.target.value.replace(/\D/g, '').slice(0, 12);
+    });
+  }
+
   btnOpen.addEventListener('click', () => {
     populateDoctorDropdown();
     modal.classList.add('open');
@@ -419,14 +434,36 @@ function setupModal() {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = document.getElementById('p-name').value;
-    const phone = document.getElementById('p-phone').value;
-    const idcard = document.getElementById('p-idcard').value;
+    const name = (document.getElementById('p-name').value || '').trim();
+    const phone = (document.getElementById('p-phone').value || '').trim();
+    const idcard = (document.getElementById('p-idcard').value || '').trim();
     const dob = document.getElementById('p-dob').value;
     const gender = document.getElementById('p-gender').value;
     const doctorId = document.getElementById('p-doctor-select').value;
-    const address = document.getElementById('p-address').value;
-    const symptoms = document.getElementById('p-symptoms').value;
+    const address = (document.getElementById('p-address').value || '').trim();
+    const symptoms = (document.getElementById('p-symptoms').value || '').trim();
+
+    if (!name) {
+      showToast('Vui lòng nhập họ và tên bệnh nhân!', 'warning');
+      document.getElementById('p-name').focus();
+      return;
+    }
+
+    // 1. Kiểm tra chuẩn CCCD/CMND: đúng 12 chữ số CCCD (hoặc 9 chữ số CMND), chỉ gồm chữ số
+    const cccdRegex = /^\d{9}$|^\d{12}$/;
+    if (!idcard || !cccdRegex.test(idcard)) {
+      showToast('Số CCCD/CMND không hợp lệ! Vui lòng nhập đúng 12 chữ số CCCD (hoặc 9 chữ số CMND), không nhập chữ cái hoặc ký tự linh tinh.', 'error');
+      document.getElementById('p-idcard').focus();
+      return;
+    }
+
+    // 2. Kiểm tra chuẩn Số điện thoại: đúng 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09
+    const phoneRegex = /^0[35789]\d{8}$/;
+    if (!phone || !phoneRegex.test(phone)) {
+      showToast('Số điện thoại không hợp lệ! Vui lòng nhập đúng 10 chữ số chuẩn di động Việt Nam (đầu 03, 05, 07, 08 hoặc 09).', 'error');
+      document.getElementById('p-phone').focus();
+      return;
+    }
 
     try {
       // 1. Tạo hoặc nạp bệnh nhân
@@ -620,6 +657,7 @@ window.selectDoctorPatient = async (appointmentId) => {
     // Không có bệnh án cũ thì bắt đầu với form mới
   }
 
+  updateLiveExamEstimate();
   loadDoctorQueue();
 };
 
@@ -627,12 +665,13 @@ function populateServicesCheckboxes() {
   const container = document.getElementById('cls-services-checkboxes');
   if (!container) return;
   container.innerHTML = state.services.map(s => `
-    <label style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem; cursor: pointer;">
+    <label style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem; cursor: pointer; padding: 4px 6px; border-radius: 4px; transition: background 0.15s;">
       <input type="checkbox" name="services" value="${s.id}" data-price="${s.price}">
-      <strong>${s.name}</strong>
-      <span style="color: var(--primary); font-weight: 600;">(${new Intl.NumberFormat('vi-VN').format(s.price)} đ)</span>
+      <span style="font-weight: 600; color: var(--dark);">${s.name}</span>
+      <span style="color: var(--primary); font-weight: 700;">(${new Intl.NumberFormat('vi-VN').format(s.price)} đ)</span>
     </label>
   `).join('');
+  container.onchange = updateLiveExamEstimate;
 }
 
 function setupDoctorExamForm() {
@@ -821,6 +860,37 @@ function setupDoctorExamForm() {
   });
 }
 
+function updateLiveExamEstimate() {
+  const examFee = 150000; // Tiền công khám bệnh ban đầu
+  let clsFee = 0;
+  document.querySelectorAll('input[name="services"]:checked').forEach(cb => {
+    clsFee += parseFloat(cb.getAttribute('data-price') || 0);
+  });
+
+  let medFee = 0;
+  document.querySelectorAll('.prescription-row').forEach(row => {
+    const medSelect = row.querySelector('.med-select');
+    const qtyInput = row.querySelector('.med-qty');
+    if (medSelect && qtyInput) {
+      const selectedMed = state.medicines.find(m => String(m.id) === String(medSelect.value));
+      const qty = parseInt(qtyInput.value, 10) || 0;
+      if (selectedMed) {
+        medFee += parseFloat(selectedMed.unit_price) * qty;
+      }
+    }
+  });
+
+  const total = examFee + clsFee + medFee;
+  const breakdownEl = document.getElementById('estimate-breakdown');
+  const totalEl = document.getElementById('estimate-total-amount');
+  if (breakdownEl) {
+    breakdownEl.innerText = `Tiền khám: ${new Intl.NumberFormat('vi-VN').format(examFee)} đ | CLS: ${new Intl.NumberFormat('vi-VN').format(clsFee)} đ | Thuốc: ${new Intl.NumberFormat('vi-VN').format(medFee)} đ`;
+  }
+  if (totalEl) {
+    totalEl.innerText = `${new Intl.NumberFormat('vi-VN').format(total)} đ`;
+  }
+}
+
 function addPrescriptionRow(medId = '', qty = 10, instr = 'Uống sau bữa ăn, 2 lần/ngày') {
   const container = document.getElementById('prescription-container');
   const row = document.createElement('div');
@@ -842,9 +912,16 @@ function addPrescriptionRow(medId = '', qty = 10, instr = 'Uống sau bữa ăn,
     </select>
     <input type="number" class="form-control med-qty" value="${selectedQty}" min="1" placeholder="SL">
     <input type="text" class="form-control med-instruction" value="${selectedInstr}" placeholder="Cách dùng">
-    <button type="button" class="btn btn-secondary btn-sm" onclick="this.parentElement.remove()" style="color: var(--danger); font-weight: bold;">✕</button>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="this.parentElement.remove(); updateLiveExamEstimate();" style="color: var(--danger); font-weight: bold;">✕</button>
   `;
+
+  const sel = row.querySelector('.med-select');
+  const inp = row.querySelector('.med-qty');
+  if (sel) sel.addEventListener('change', updateLiveExamEstimate);
+  if (inp) inp.addEventListener('input', updateLiveExamEstimate);
+
   container.appendChild(row);
+  updateLiveExamEstimate();
 }
 
 // ==========================================
