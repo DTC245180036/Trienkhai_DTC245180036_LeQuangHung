@@ -310,8 +310,8 @@
 
             <div class="form-grid">
               <div class="form-group">
-                <label>Huyết áp (mmHg)</label>
-                <input type="text" class="form-control" id="exam-bp" placeholder="VD: 120/80" value="120/80">
+                <label>Huyết áp (mmHg) * <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Tâm thu/Tâm trương)</span></label>
+                <input type="text" class="form-control" id="exam-bp" placeholder="VD: 120/80" value="120/80" required pattern="\d{2,3}/\d{2,3}">
               </div>
               <div class="form-group">
                 <label>Thân nhiệt (°C)</label>
@@ -495,7 +495,7 @@
               <span style="font-size: 1.2rem;">🩺</span>
             </div>
             <div style="font-size: 1.6rem; font-weight: 800; color: #0284c7; margin: 6px 0 2px 0;" id="rep-exam-fee">0 đ</div>
-            <div style="font-size: 0.78rem; color: #0369a1;">Định mức: 50.000 đ/lượt</div>
+            <div style="font-size: 0.78rem; color: #0369a1;">Định mức: 150.000 đ/lượt</div>
           </div>
 
           <div style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border: 1px solid #e9d5ff; border-radius: 14px; padding: 16px 20px;">
@@ -728,6 +728,8 @@
         <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--dark);">➕ Tiếp Nhận Bệnh Nhân & Cấp Số Khám</h3>
         <button class="modal-close" id="btn-close-modal">&times;</button>
       </div>
+
+      <div id="patient-lookup-status" style="display: none; padding: 10px 14px; margin: 0 0 16px 0; border-radius: 10px; font-size: 0.82rem; font-weight: 600; transition: all 0.3s ease;"></div>
 
       <form id="form-new-patient">
         <div class="form-grid">

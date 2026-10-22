@@ -313,6 +313,13 @@ function performLogout() {
   showLoginScreen();
   const passInput = document.getElementById('login-password');
   if (passInput) passInput.value = '';
+  const filterSelect = document.getElementById('doctor-filter-select');
+  if (filterSelect) {
+    filterSelect.disabled = false;
+    filterSelect.style.backgroundColor = '';
+    filterSelect.style.cursor = 'default';
+    filterSelect.title = '';
+  }
   showToast('Đã đăng xuất khỏi hệ thống thành công!', 'info');
 }
 
@@ -469,12 +476,33 @@ function populateDoctorDropdown() {
 
   const filterSelect = document.getElementById('doctor-filter-select');
   if (filterSelect) {
-    const curVal = filterSelect.value || 'all';
-    filterSelect.innerHTML = `<option value="all">🏥 Tất cả phòng khám / bác sĩ</option>` + state.doctors.map(d => `
-      <option value="${d.id}">${d.full_name} - ${d.department_name} (${d.room_number})</option>
-    `).join('');
-    filterSelect.value = curVal;
-    filterSelect.onchange = loadDoctorQueue;
+    const isDoctor = state.currentUser?.role === 'DOCTOR' && state.currentUser?.doctor;
+    const currentDoctorId = isDoctor ? state.currentUser.doctor.doctor_id : null;
+
+    if (isDoctor && currentDoctorId) {
+      // Bác sĩ đang đăng nhập: Khóa cứng phòng khám vào bác sĩ đó, không cho xem/chọn phòng bác sĩ khác
+      const myDoctor = state.doctors.find(d => String(d.id) === String(currentDoctorId)) || state.currentUser.doctor;
+      const docName = myDoctor.full_name || state.currentUser.full_name;
+      const deptName = myDoctor.department_name || state.currentUser.doctor.department_name;
+      const roomNum = myDoctor.room_number || state.currentUser.doctor.room_number;
+      filterSelect.innerHTML = `<option value="${currentDoctorId}">🔒 BS. ${docName} - ${deptName} (${roomNum})</option>`;
+      filterSelect.value = String(currentDoctorId);
+      filterSelect.disabled = true;
+      filterSelect.style.backgroundColor = '#f1f5f9';
+      filterSelect.style.cursor = 'not-allowed';
+      filterSelect.title = 'Phòng khám được khóa tự động theo tài khoản Bác sĩ đang trực';
+    } else {
+      filterSelect.disabled = false;
+      filterSelect.style.backgroundColor = '';
+      filterSelect.style.cursor = 'default';
+      filterSelect.title = '';
+      const curVal = filterSelect.value || 'all';
+      filterSelect.innerHTML = `<option value="all">🏥 Tất cả phòng khám / bác sĩ</option>` + state.doctors.map(d => `
+        <option value="${d.id}">${d.full_name} - ${d.department_name} (${d.room_number})</option>
+      `).join('');
+      filterSelect.value = curVal;
+      filterSelect.onchange = loadDoctorQueue;
+    }
   }
 }
 
@@ -546,25 +574,112 @@ function setupModal() {
 
   const inputPhone = document.getElementById('p-phone');
   const inputIdCard = document.getElementById('p-idcard');
+  const statusBanner = document.getElementById('patient-lookup-status');
+
+  // Tra cứu tự động nhận diện bệnh nhân cũ hoặc cảnh báo trùng số điện thoại
+  let lookupTimeout = null;
+  const checkExistingPatient = () => {
+    clearTimeout(lookupTimeout);
+    lookupTimeout = setTimeout(async () => {
+      const phone = (inputPhone?.value || '').trim();
+      const idcard = (inputIdCard?.value || '').trim();
+      const nameInput = document.getElementById('p-name');
+      const dobInput = document.getElementById('p-dob');
+      const genderSelect = document.getElementById('p-gender');
+      const addressInput = document.getElementById('p-address');
+
+      if (phone.length < 10 && idcard.length < 9) {
+        if (statusBanner) statusBanner.style.display = 'none';
+        return;
+      }
+
+      try {
+        const q = phone.length === 10 ? phone : idcard;
+        const res = await fetch(`${API_BASE}/patients?search=${encodeURIComponent(q)}`);
+        if (!res.ok) return;
+        const list = await res.json();
+        if (!list || list.length === 0) {
+          if (statusBanner) statusBanner.style.display = 'none';
+          return;
+        }
+
+        // Tìm người khớp SĐT hoặc CCCD
+        const matched = list.find(p => (phone && p.phone === phone) || (idcard && p.identity_card === idcard));
+        if (!matched) {
+          if (statusBanner) statusBanner.style.display = 'none';
+          return;
+        }
+
+        const currentName = (nameInput.value || '').trim().toLowerCase();
+        const matchedName = (matched.full_name || '').trim().toLowerCase();
+
+        // Trường hợp 1: Trùng SĐT nhưng họ tên nhập khác hoàn toàn bệnh nhân cũ
+        if (phone && matched.phone === phone && currentName && currentName !== matchedName) {
+          if (statusBanner) {
+            statusBanner.style.display = 'block';
+            statusBanner.style.background = '#fef2f2';
+            statusBanner.style.borderColor = '#fca5a5';
+            statusBanner.style.color = '#991b1b';
+            statusBanner.innerHTML = `⚠️ <strong>Cảnh báo trùng số điện thoại:</strong> Số <strong>${phone}</strong> đã được đăng ký cho bệnh nhân <strong>${matched.full_name}</strong> (CCCD: ${matched.identity_card}). Trong thực tế mỗi bệnh nhân cần số điện thoại riêng để nhận đơn thuốc & liên lạc y tế. Vui lòng kiểm tra lại.`;
+          }
+        } else {
+          // Trường hợp 2: Tái khám (hoặc chưa nhập tên) -> Tự động điền thông tin cũ
+          if (!nameInput.value || currentName === matchedName) {
+            nameInput.value = matched.full_name || '';
+          }
+          if (matched.phone && !inputPhone.value) inputPhone.value = matched.phone;
+          if (matched.identity_card && !inputIdCard.value) inputIdCard.value = matched.identity_card;
+          if (matched.dob && dobInput && !dobInput.value) dobInput.value = matched.dob.split('T')[0];
+          if (matched.gender && genderSelect) genderSelect.value = matched.gender;
+          if (matched.address && addressInput && !addressInput.value) addressInput.value = matched.address;
+
+          if (statusBanner) {
+            statusBanner.style.display = 'block';
+            statusBanner.style.background = '#f0fdf4';
+            statusBanner.style.borderColor = '#86efac';
+            statusBanner.style.color = '#166534';
+            statusBanner.innerHTML = `✅ <strong>Bệnh nhân cũ (Tái khám):</strong> Đã nhận diện hồ sơ <strong>${matched.full_name}</strong> (CCCD: ${matched.identity_card}, SĐT: ${matched.phone}). Đã tự động nạp thông tin để tiếp đón nhanh.`;
+          }
+        }
+      } catch (e) {
+        // Bỏ qua lỗi tra cứu nền
+      }
+    }, 250);
+  };
 
   // Tự động chặn và loại bỏ ký tự không phải số ngay khi gõ/paste
   if (inputPhone) {
     inputPhone.addEventListener('input', (e) => {
       e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
+      if (e.target.value.length === 10) checkExistingPatient();
     });
+    inputPhone.addEventListener('blur', checkExistingPatient);
   }
   if (inputIdCard) {
     inputIdCard.addEventListener('input', (e) => {
       e.target.value = e.target.value.replace(/\D/g, '').slice(0, 12);
+      if (e.target.value.length === 9 || e.target.value.length === 12) checkExistingPatient();
     });
+    inputIdCard.addEventListener('blur', checkExistingPatient);
+  }
+  const nameInputEl = document.getElementById('p-name');
+  if (nameInputEl) {
+    nameInputEl.addEventListener('blur', checkExistingPatient);
   }
 
   btnOpen.addEventListener('click', () => {
     populateDoctorDropdown();
+    if (statusBanner) statusBanner.style.display = 'none';
     modal.classList.add('open');
   });
-  btnClose.addEventListener('click', () => modal.classList.remove('open'));
-  btnCancel.addEventListener('click', () => modal.classList.remove('open'));
+  btnClose.addEventListener('click', () => {
+    if (statusBanner) statusBanner.style.display = 'none';
+    modal.classList.remove('open');
+  });
+  btnCancel.addEventListener('click', () => {
+    if (statusBanner) statusBanner.style.display = 'none';
+    modal.classList.remove('open');
+  });
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -608,6 +723,13 @@ function setupModal() {
       });
       if (!patRes.ok) {
         const errJson = await patRes.json().catch(() => ({}));
+        if (statusBanner && errJson.error) {
+          statusBanner.style.display = 'block';
+          statusBanner.style.background = '#fef2f2';
+          statusBanner.style.borderColor = '#fca5a5';
+          statusBanner.style.color = '#991b1b';
+          statusBanner.innerHTML = `❌ <strong>Không thể tiếp nhận:</strong> ${errJson.error}`;
+        }
         throw new Error(errJson.error || 'Không thể thêm hồ sơ bệnh nhân');
       }
       const patData = await patRes.json();
@@ -627,6 +749,7 @@ function setupModal() {
       showToast(`Đã cấp số thứ tự #${appData.queue_number} cho bệnh nhân ${name}!`, 'success');
       modal.classList.remove('open');
       form.reset();
+      if (statusBanner) statusBanner.style.display = 'none';
       await loadAvailableDates();
       await loadDashboardData();
     } catch (err) {
@@ -740,8 +863,12 @@ async function loadDoctorQueue() {
     if (!res.ok) return;
     state.appointments = await res.json();
 
+    const isDoctor = state.currentUser?.role === 'DOCTOR' && state.currentUser?.doctor;
+    const currentDoctorId = isDoctor ? state.currentUser.doctor.doctor_id : null;
+
     const filterSelect = document.getElementById('doctor-filter-select');
-    const selectedDoctorId = filterSelect ? filterSelect.value : 'all';
+    // Nếu là Bác sĩ: bắt buộc lọc theo phòng của chính mình, không tải bệnh nhân của bác sĩ khác
+    const selectedDoctorId = isDoctor ? String(currentDoctorId) : (filterSelect ? filterSelect.value : 'all');
 
     let waitingOrActive = state.appointments.filter(a => a.status === 'WAITING' || a.status === 'IN_PROGRESS');
     if (selectedDoctorId && selectedDoctorId !== 'all') {
@@ -780,11 +907,21 @@ window.selectDoctorPatient = async (appointmentId) => {
     appointment = state.appointments.find(a => a.id == appointmentId);
     if (!appointment) return;
   }
+
+  // KIỂM TRA PHÂN QUYỀN KHÁM BỆNH CỦA BÁC SĨ (Chặn việc bác sĩ này khám cho bệnh nhân của bác sĩ khác)
+  if (state.currentUser?.role === 'DOCTOR' && state.currentUser?.doctor) {
+    const currentDoctorId = state.currentUser.doctor.doctor_id;
+    if (appointment.doctor_id && String(appointment.doctor_id) !== String(currentDoctorId)) {
+      showToast(`⛔ Bạn không có quyền khám ca này! Bệnh nhân ${appointment.patient_name} được phân công cho ${appointment.doctor_name || 'Bác sĩ khác'}.`, 'error');
+      return;
+    }
+  }
+
   state.selectedAppointment = appointment;
 
-  // Đảm bảo bộ lọc không ẩn bệnh nhân đang được chọn
+  // Nếu không phải là bác sĩ (Admin đang xem), đồng bộ bộ lọc nếu cần
   const filterSelect = document.getElementById('doctor-filter-select');
-  if (filterSelect && filterSelect.value !== 'all' && appointment.doctor_id && filterSelect.value != appointment.doctor_id) {
+  if (filterSelect && !filterSelect.disabled && filterSelect.value !== 'all' && appointment.doctor_id && filterSelect.value != appointment.doctor_id) {
     filterSelect.value = 'all';
   }
 
@@ -1001,12 +1138,37 @@ function setupDoctorExamForm() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const appointmentId = document.getElementById('exam-appointment-id').value;
-    const bp = document.getElementById('exam-bp').value;
-    const temp = document.getElementById('exam-temp').value;
-    const diagnosis = document.getElementById('exam-diagnosis').value;
+    const bpInput = document.getElementById('exam-bp');
+    const bp = (bpInput ? bpInput.value : '').trim();
+    const tempInput = document.getElementById('exam-temp');
+    const temp = (tempInput ? tempInput.value : '').trim();
+    const diagnosisInput = document.getElementById('exam-diagnosis');
+    const diagnosis = (diagnosisInput ? diagnosisInput.value : '').trim();
     const advice = document.getElementById('exam-advice').value;
 
-    // Lấy danh sách dịch vụ đã chọn
+    // 1. Kiểm tra chuẩn Huyết áp Y khoa: bắt buộc phải có định dạng Tâm thu / Tâm trương (VD: 120/80)
+    const bpRegex = /^(\d{2,3})\/(\d{2,3})$/;
+    const bpMatch = bp.match(bpRegex);
+    if (!bpMatch) {
+      showToast('Chỉ số Huyết áp không hợp lệ! Vui lòng nhập đúng định dạng Y khoa: Tâm thu / Tâm trương (Ví dụ: 120/80, 110/70 mmHg). Không được chỉ nhập 1 con số.', 'error');
+      if (bpInput) bpInput.focus();
+      return;
+    }
+    const systolic = parseInt(bpMatch[1], 10);
+    const diastolic = parseInt(bpMatch[2], 10);
+    if (systolic < 60 || systolic > 250 || diastolic < 40 || diastolic > 150 || systolic <= diastolic) {
+      showToast(`Huyết áp ${bp} mmHg không đúng quy chuẩn y sinh! Yêu cầu: Tâm thu (${systolic}) phải lớn hơn Tâm trương (${diastolic}) trong khoảng sinh lý cho phép (60-250 / 40-150 mmHg).`, 'error');
+      if (bpInput) bpInput.focus();
+      return;
+    }
+
+    // 2. Bắt buộc nhập chẩn đoán
+    if (!diagnosis) {
+      showToast('Vui lòng nhập kết luận chẩn đoán bệnh lý trước khi hoàn tất khám!', 'warning');
+      if (diagnosisInput) diagnosisInput.focus();
+      return;
+    }
+
     // Lấy danh sách dịch vụ đã chọn và ảnh X-quang nếu có
     const imgUrl = document.getElementById('exam-image-url').value;
     const selectedServices = [];
@@ -1029,14 +1191,20 @@ function setupDoctorExamForm() {
       }
     });
 
+    // Xác định bác sĩ thực hiện (bác sĩ đang đăng nhập)
+    const activeDoctorId = (state.currentUser?.role === 'DOCTOR' && state.currentUser?.doctor)
+      ? state.currentUser.doctor.doctor_id
+      : (state.selectedAppointment?.doctor_id || null);
+
     try {
       const res = await fetch(`${API_BASE}/medical-records`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           appointment_id: parseInt(appointmentId, 10),
+          doctor_id: activeDoctorId,
           blood_pressure: bp,
-          temperature: parseFloat(temp),
+          temperature: parseFloat(temp) || 37.0,
           diagnosis,
           doctor_advice: advice,
           services: selectedServices,
@@ -1610,7 +1778,7 @@ function exportRevenueWord() {
           <tbody>
             <tr>
               <td style="text-align: center;">1</td>
-              <td><strong>Doanh thu tiền khám bệnh chuyên khoa</strong> (Định mức 50.000 đ/lượt)</td>
+              <td><strong>Doanh thu tiền khám bệnh chuyên khoa</strong> (Định mức 150.000 đ/lượt)</td>
               <td style="text-align: center;">${data.summary.paid_count} ca khám</td>
               <td style="text-align: right; font-weight: bold;">${fmt(data.summary.exam_fee_total)}</td>
             </tr>
@@ -1822,7 +1990,7 @@ function printRevenueReportA4() {
         <tbody>
           <tr>
             <td style="text-align: center;">1</td>
-            <td><strong>Doanh thu tiền khám bệnh chuyên khoa</strong> (Định mức 50.000 đ/lượt)</td>
+            <td><strong>Doanh thu tiền khám bệnh chuyên khoa</strong> (Định mức 150.000 đ/lượt)</td>
             <td style="text-align: center;">${data.summary.paid_count} lượt</td>
             <td style="text-align: right; font-weight: bold;">${fmt(data.summary.exam_fee_total)}</td>
           </tr>

@@ -347,7 +347,7 @@ app.get('/stats/revenue-report', async (req, res) => {
     const medicineTotal = parseFloat(medRes.rows[0].medicine_total);
 
     const paidCount = parseInt(summary.paid_count, 10);
-    const examFeeTotal = paidCount * 50000;
+    const examFeeTotal = paidCount * 150000;
 
     // 3. Doanh thu & lượt khám theo 4 Bác sĩ / Chuyên khoa
     const doctorQuery = `
@@ -501,7 +501,26 @@ app.post('/patients', async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // 1. Kiểm tra bệnh nhân đã tồn tại theo CCCD chưa (Hỗ trợ bệnh nhân tái khám)
+    // 1. Kiểm tra số điện thoại có bị trùng với bệnh nhân khác không
+    const phoneOwnerCheck = await client.query(`
+      SELECT p.id, p.identity_card, u.full_name, u.phone 
+      FROM patients p 
+      JOIN users u ON p.user_id = u.id 
+      WHERE u.phone = $1
+    `, [cleanPhone]);
+
+    if (phoneOwnerCheck.rows.length > 0) {
+      const owner = phoneOwnerCheck.rows[0];
+      // Nếu số điện thoại đã tồn tại nhưng nhập họ tên khác hoặc CCCD khác
+      if (owner.identity_card !== cleanIdCard && owner.full_name.trim().toLowerCase() !== full_name.trim().toLowerCase()) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: `Số điện thoại ${cleanPhone} đã được đăng ký cho bệnh nhân "${owner.full_name}" (CCCD: ${owner.identity_card}). Trong quản lý y tế, mỗi bệnh nhân phải có hồ sơ và số điện thoại riêng để nhận kết quả khám và liên hệ!`
+        });
+      }
+    }
+
+    // 2. Kiểm tra bệnh nhân đã tồn tại theo CCCD chưa (Hỗ trợ bệnh nhân tái khám)
     const existingPat = await client.query(`
       SELECT p.*, u.full_name, u.phone 
       FROM patients p 
@@ -809,6 +828,7 @@ app.post('/medical-records', async (req, res) => {
     blood_pressure,
     diagnosis,
     doctor_advice,
+    doctor_id, // ID bác sĩ đang thực hiện khám
     services = [], // [{ service_id, result_text }]
     prescriptions = [] // [{ medicine_id, quantity, dosage_instructions }]
   } = req.body;
@@ -817,11 +837,43 @@ app.post('/medical-records', async (req, res) => {
     return res.status(400).json({ error: 'Mã lịch hẹn và Chẩn đoán là bắt buộc' });
   }
 
+  // 1. Kiểm tra định dạng huyết áp (Tâm thu / Tâm trương)
+  const bpClean = (blood_pressure || '').toString().trim();
+  const bpMatch = bpClean.match(/^(\d{2,3})\/(\d{2,3})$/);
+  if (!bpMatch) {
+    return res.status(400).json({ 
+      error: 'Chỉ số huyết áp không hợp lệ! Huyết áp phải đủ 2 chỉ số Tâm thu / Tâm trương (VD: 120/80 hoặc 110/70 mmHg).' 
+    });
+  }
+  const systolic = parseInt(bpMatch[1], 10);
+  const diastolic = parseInt(bpMatch[2], 10);
+  if (systolic <= diastolic || systolic < 60 || systolic > 250 || diastolic < 40 || diastolic > 150) {
+    return res.status(400).json({ 
+      error: `Chỉ số huyết áp ${bpClean} không hợp lệ! Huyết áp tâm thu (${systolic}) phải lớn hơn tâm trương (${diastolic}) và nằm trong khoảng sinh lý (60-250 / 40-150 mmHg).` 
+    });
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // 1. Tạo hoặc cập nhật medical_records
+    // 2. Kiểm tra phân quyền: Ca khám này có thuộc về bác sĩ này không
+    const appRes = await client.query('SELECT doctor_id FROM appointments WHERE id = $1', [appointment_id]);
+    if (appRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Không tìm thấy ca khám bệnh' });
+    }
+    const assignedDoctorId = appRes.rows[0].doctor_id;
+    if (doctor_id && parseInt(doctor_id, 10) !== assignedDoctorId) {
+      const docInfo = await client.query('SELECT u.full_name, d.room_number FROM doctors d JOIN users u ON d.user_id = u.id WHERE d.id = $1', [assignedDoctorId]);
+      const targetDoc = docInfo.rows[0] ? `${docInfo.rows[0].full_name} (${docInfo.rows[0].room_number})` : 'Bác sĩ khác';
+      await client.query('ROLLBACK');
+      return res.status(403).json({ 
+        error: `Bạn không thể lưu bệnh án của ca khám này! Bệnh nhân được chỉ định cho ${targetDoc}. Vui lòng đăng nhập đúng tài khoản bác sĩ phụ trách!` 
+      });
+    }
+
+    // 3. Tạo hoặc cập nhật medical_records
     const recordRes = await client.query(`
       INSERT INTO medical_records (appointment_id, temperature, blood_pressure, diagnosis, doctor_advice)
       VALUES ($1, $2, $3, $4, $5)
@@ -832,7 +884,7 @@ app.post('/medical-records', async (req, res) => {
         diagnosis = EXCLUDED.diagnosis,
         doctor_advice = EXCLUDED.doctor_advice
       RETURNING id
-    `, [appointment_id, temperature || 37.0, blood_pressure || '120/80', diagnosis, doctor_advice || '']);
+    `, [appointment_id, temperature || 37.0, bpClean, diagnosis, doctor_advice || '']);
 
     const recordId = recordRes.rows[0].id;
 
@@ -840,7 +892,7 @@ app.post('/medical-records', async (req, res) => {
     await client.query(`DELETE FROM service_requests WHERE record_id = $1`, [recordId]);
     await client.query(`DELETE FROM prescriptions WHERE record_id = $1`, [recordId]);
 
-    // 2. Thêm chỉ định dịch vụ CLS
+    // 4. Thêm chỉ định dịch vụ CLS
     let servicesTotal = 0;
     for (const s of services) {
       if (!s.service_id) continue;
@@ -853,7 +905,7 @@ app.post('/medical-records', async (req, res) => {
       if (sPrice.rows.length) servicesTotal += parseFloat(sPrice.rows[0].price);
     }
 
-    // 3. Thêm đơn thuốc
+    // 5. Thêm đơn thuốc
     let medicinesTotal = 0;
     for (const p of prescriptions) {
       if (!p.medicine_id || !p.quantity) continue;
@@ -868,11 +920,11 @@ app.post('/medical-records', async (req, res) => {
       }
     }
 
-    // 4. Cập nhật trạng thái appointment sang COMPLETED
+    // 6. Cập nhật trạng thái appointment sang COMPLETED
     await client.query(`UPDATE appointments SET status = 'COMPLETED' WHERE id = $1`, [appointment_id]);
 
-    // 5. Tự động sinh hóa đơn (Tiền khám: 50,000 + dịch vụ CLS + tiền thuốc)
-    const examFee = 50000;
+    // 7. Tự động sinh hóa đơn (Tiền khám: 150,000 + dịch vụ CLS + tiền thuốc)
+    const examFee = 150000;
     const totalAmount = examFee + servicesTotal + medicinesTotal;
 
     await client.query(`
