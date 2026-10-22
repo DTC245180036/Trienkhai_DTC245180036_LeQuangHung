@@ -44,22 +44,46 @@ Hệ thống được đóng gói và điều phối hoàn toàn qua **Docker Co
 
 ## III. HƯỚNG DẪN KHỞI CHẠY HỆ THỐNG (1-CLICK)
 
-### Yêu cầu tiên quyết:
-* Máy tính đã cài đặt **Docker Desktop** (Engine running).
-* Hệ điều hành: Windows 10/11 hoặc Linux.
+File `README.md` được biên soạn chi tiết, hướng dẫn cụ thể cách thức clone repository, cấu hình biến môi trường và chạy lệnh `docker compose up -d` để khởi chạy toàn bộ hệ thống.
 
-### Các bước khởi chạy:
+### Yêu cầu tiên quyết:
+* Máy tính đã cài đặt **Docker Desktop** (Engine đang chạy).
+* Công cụ dòng lệnh: **Git**, **PowerShell** (Windows) hoặc **Terminal** (Linux/macOS).
+
+### Các bước khởi chạy chi tiết:
+
+#### 1. Clone repository từ GitHub
 ```bash
-# 1. Clone mã nguồn từ GitHub
 git clone https://github.com/DTC245180036/Trienkhai_DTC245180036_LeQuangHung.git
 cd Trienkhai_DTC245180036_LeQuangHung
+```
 
-# 2. Khởi động toàn bộ 8 containers
-# Cách A: Click đúp vào file start.bat (Khuyên dùng trên Windows)
-# Cách B: Chạy lệnh Docker Compose từ Terminal:
+#### 2. Cấu hình biến môi trường
+Tạo tệp cấu hình `.env` từ tệp mẫu `.env.example` để thiết lập thông tin kết nối CSDL và cổng dịch vụ:
+* **Trên Windows (PowerShell / Command Prompt):**
+```powershell
+copy .env.example .env
+```
+* **Trên Linux / macOS:**
+```bash
+cp .env.example .env
+```
+> **Ghi chú cấu hình:** Tệp `.env` đã được thiết lập mặc định an toàn cho môi trường chạy thử nghiệm:
+> * `POSTGRES_DB=clinic_management`
+> * `POSTGRES_USER=clinic_admin`
+> * `POSTGRES_PASSWORD=YourSecurePasswordHere!`
+> * `PORT=8000`
+
+#### 3. Chạy lệnh khởi chạy toàn bộ hệ thống
+Chạy lệnh `docker compose up -d` để tải các image, build dịch vụ và khởi động đồng thời cả 8 container chạy ngầm trong nền:
+```bash
 docker compose up -d --build
+```
+*(Hoặc click đúp chuột vào file `start.bat` trên Windows để khởi chạy tự động chỉ với 1-click).*
 
-# 3. Kiểm tra trạng thái các container
+#### 4. Kiểm tra trạng thái các container
+Kiểm tra đảm bảo toàn bộ 8 container đều đang chạy ổn định (`Up` hoặc `Up (healthy)`):
+```bash
 docker compose ps
 ```
 
