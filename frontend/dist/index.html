@@ -4,15 +4,102 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hệ Thống Quản Lý Phòng Khám (HMS) - Triển Khai & Quản Trị Hệ Thống</title>
-  <link rel="stylesheet" href="styles.css?v=6.4">
+  <link rel="stylesheet" href="styles.css?v=6.5">
 </head>
 <body>
 
-  <!-- 1. THANH ĐIỀU PHỐI VÀ CHUYỂN ĐỔI PHÂN HỆ (RBAC) -->
-  <aside class="demo-bar" aria-label="Thanh điều phối phân hệ vai trò y tế">
-    <div class="demo-title">
-      <span>🏥 HỆ THỐNG QUẢN LÝ PHÒNG KHÁM (HMS)</span>
+  <!-- ======================================================== -->
+  <!-- 0. MÀN HÌNH ĐĂNG NHẬP PHÂN QUYỀN (LOGIN & RBAC PORTAL)   -->
+  <!-- ======================================================== -->
+  <div id="login-screen" class="login-overlay">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-logo-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M19 10.5H13.5V5C13.5 4.17 12.83 3.5 12 3.5C11.17 3.5 10.5 4.17 10.5 5V10.5H5C4.17 10.5 3.5 11.17 3.5 12C3.5 12.83 4.17 13.5 5 13.5H10.5V19C10.5 19.83 11.17 20.5 12 20.5C12.83 20.5 13.5 19.83 13.5 19V13.5H19C19.83 13.5 20.5 12.83 20.5 12C20.5 11.17 19.83 10.5 19 10.5Z" fill="white"/>
+            <path d="M6.5 12H9L10.5 9.5L13.5 14.5L15 12H17.5" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h2 class="login-title">BỆNH VIỆN ĐA KHOA ICTU</h2>
+        <p class="login-sub">Cổng Đăng Nhập & Xác Thực Phân Quyền Vai Trò (RBAC)</p>
+        <div style="margin-top: 8px;">
+          <span style="font-size: 0.72rem; background: #e0f2fe; color: #0284c7; padding: 4px 12px; border-radius: 999px; font-weight: 700;">
+            🔒 Hệ Thống Quản Trị Y Tế Đa Tầng (Docker + Nginx)
+          </span>
+        </div>
+      </div>
+
+      <form id="form-login">
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label style="font-size: 0.85rem; font-weight: 700; color: #334155;">Tên Đăng Nhập</label>
+          <div style="position: relative;">
+            <input type="text" id="login-username" class="form-control" placeholder="Nhập username (vd: admin, bacsi_nam, letan01...)" required style="padding-left: 38px;">
+            <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 1rem;">👤</span>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label style="font-size: 0.85rem; font-weight: 700; color: #334155;">Mật Khẩu</label>
+          <div style="position: relative;">
+            <input type="password" id="login-password" class="form-control" placeholder="Nhập mật khẩu (mặc định: 123456)" required style="padding-left: 38px;">
+            <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 1rem;">🔑</span>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="btn-submit-login" style="width: 100%; justify-content: center; padding: 12px; font-size: 0.95rem; font-weight: 700;">
+          🔐 ĐĂNG NHẬP VÀO HỆ THỐNG
+        </button>
+      </form>
+
+      <!-- DANH SÁCH TÀI KHOẢN MẪU ĐỂ CHỌN NHANH KHI DEMO BẢO VỆ ĐỒ ÁN -->
+      <div class="quick-accounts-section">
+        <div class="quick-accounts-title">
+          <span>⚡ Chọn nhanh tài khoản mẫu (Demo Báo cáo):</span>
+        </div>
+        <div class="quick-accounts-grid">
+          <button type="button" class="quick-acc-btn" onclick="quickLogin('admin', '123456')">
+            <span class="acc-icon">👑</span>
+            <div>
+              <div class="acc-title">Quản Trị Viên</div>
+              <div class="acc-desc">Toàn quyền / DevOps</div>
+            </div>
+          </button>
+          <button type="button" class="quick-acc-btn" onclick="quickLogin('letan01', '123456')">
+            <span class="acc-icon">📋</span>
+            <div>
+              <div class="acc-title">Lễ Tân</div>
+              <div class="acc-desc">Tiếp nhận & Cấp số</div>
+            </div>
+          </button>
+          <button type="button" class="quick-acc-btn" onclick="quickLogin('bacsi_nam', '123456')">
+            <span class="acc-icon">🩺</span>
+            <div>
+              <div class="acc-title">Bác Sĩ Nam</div>
+              <div class="acc-desc">Khám bệnh & Kê đơn</div>
+            </div>
+          </button>
+          <button type="button" class="quick-acc-btn" onclick="quickLogin('thungan01', '123456')">
+            <span class="acc-icon">💳</span>
+            <div>
+              <div class="acc-title">Thu Ngân</div>
+              <div class="acc-desc">Viện phí & Hóa đơn</div>
+            </div>
+          </button>
+        </div>
+      </div>
     </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MAIN APP CONTAINER (CHỈ HIỂN THỊ KHI ĐÃ ĐĂNG NHẬP)        -->
+  <!-- ======================================================== -->
+  <div id="app-wrapper" style="display: none;">
+
+    <!-- 1. THANH ĐIỀU PHỐI VÀ CHUYỂN ĐỔI PHÂN HỆ (RBAC) -->
+    <aside class="demo-bar" aria-label="Thanh điều phối phân hệ vai trò y tế">
+      <div class="demo-title">
+        <span>🏥 HỆ THỐNG QUẢN LÝ PHÒNG KHÁM (HMS)</span>
+      </div>
 
     <nav class="role-switcher" aria-label="Chuyển đổi vai trò">
       <span style="font-size: 0.75rem; color: #94a3b8; margin-right: 4px;">Chuyển vai trò:</span>
@@ -72,6 +159,9 @@
         <div class="user-name" id="current-name">Nguyễn Thị Hoa (Lễ Tân)</div>
         <div class="user-role" id="current-role">LỄ TÂN (Tiếp nhận & Cấp số)</div>
       </div>
+      <button type="button" id="btn-logout" title="Đăng xuất khỏi hệ thống" style="padding: 5px 12px; font-size: 0.78rem; font-weight: 700; border-radius: 999px; margin-left: 6px; color: #dc2626; border: 1px solid #fecaca; background: #fff5f5; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+        🚪 Đăng Xuất
+      </button>
     </div>
   </header>
 
@@ -546,9 +636,11 @@
     </div>
   </div>
 
+  </div> <!-- /#app-wrapper -->
+
   <!-- TOAST NOTIFICATIONS -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script src="app.js?v=6.4"></script>
+  <script src="app.js?v=6.5"></script>
 </body>
 </html>

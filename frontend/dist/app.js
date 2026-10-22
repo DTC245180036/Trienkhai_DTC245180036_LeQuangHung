@@ -7,12 +7,8 @@ const API_BASE = (window.location.port === '8000')
 
 // Global State
 const state = {
-  currentRole: 'RECEPTIONIST',
-  currentUser: {
-    name: 'Nguyễn Thị Hoa (Lễ Tân)',
-    role: 'LỄ TÂN (Tiếp nhận & Cấp số)',
-    avatar: 'LT'
-  },
+  currentRole: null,
+  currentUser: null,
   filterDate: 'today',
   doctors: [],
   services: [],
@@ -32,17 +28,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupDoctorExamForm();
   setupStressTest();
   setupReceptionDateFilter();
+  setupAuth();
 
-  // Khởi tạo phân quyền ban đầu (RBAC Enforcement)
-  applyRolePermissions(state.currentRole);
-
-  // Khởi động kiểm tra máy chủ & tải dữ liệu ban đầu
+  // Khởi động kiểm tra máy chủ & trạng thái container
   await checkServerHealth();
   setInterval(checkServerHealth, 10000);
 
-  await loadInitialCatalogs();
-  await loadAvailableDates();
-  await loadDashboardData();
+  // Kiểm tra phiên đăng nhập đã lưu trong localStorage
+  const savedUserJson = localStorage.getItem('clinic_auth_user');
+  if (savedUserJson) {
+    try {
+      const savedUser = JSON.parse(savedUserJson);
+      applyLoggedInState(savedUser);
+    } catch (e) {
+      showLoginScreen();
+    }
+  } else {
+    showLoginScreen();
+  }
 });
 
 // Toast notification helper
@@ -157,31 +160,137 @@ function setupRoleSwitcher() {
   const roleButtons = document.querySelectorAll('.role-btn');
   roleButtons.forEach(btn => {
     btn.addEventListener('click', () => {
-      roleButtons.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-
       const role = btn.dataset.role;
-      state.currentRole = role;
+      const userMap = {
+        ADMIN: { username: 'admin', full_name: 'Quản Trị Viên Hệ Thống', role: 'ADMIN', avatar: 'AD' },
+        DOCTOR: { username: 'bacsi_nam', full_name: 'BS CK1. Trần Văn Nam', role: 'DOCTOR', avatar: 'BS' },
+        RECEPTIONIST: { username: 'letan01', full_name: 'Nguyễn Thị Hoa (Lễ Tân)', role: 'RECEPTIONIST', avatar: 'LT' },
+        CASHIER: { username: 'thungan01', full_name: 'Phòng Thu Ngân & Viện Phí', role: 'CASHIER', avatar: 'TN' }
+      };
 
-      if (role === 'ADMIN') {
-        state.currentUser = { name: 'Quản Trị Viên Hệ Thống', role: 'ADMIN (Toàn quyền)', avatar: 'AD' };
-      } else if (role === 'DOCTOR') {
-        state.currentUser = { name: 'BS CK1. Trần Văn Nam', role: 'BÁC SĨ (Chẩn đoán & Kê đơn)', avatar: 'BS' };
-      } else if (role === 'RECEPTIONIST') {
-        state.currentUser = { name: 'Nguyễn Thị Hoa (Lễ Tân)', role: 'LỄ TÂN (Tiếp nhận & Cấp số)', avatar: 'LT' };
-      } else if (role === 'CASHIER') {
-        state.currentUser = { name: 'Phòng Thu Ngân & Viện Phí', role: 'THU NGÂN (Thu phí & In hóa đơn)', avatar: 'TN' };
-      }
+      const target = userMap[role];
+      if (!target) return;
 
-      document.getElementById('current-avatar').innerText = state.currentUser.avatar;
-      document.getElementById('current-name').innerText = state.currentUser.name;
-      document.getElementById('current-role').innerText = state.currentUser.role;
-
-      // Thực thi phân quyền RBAC tức thì: ẩn các tab không thuộc quyền
-      applyRolePermissions(role);
-      showToast(`Đã chuyển vai trò: ${state.currentUser.name}`, 'info');
+      localStorage.setItem('clinic_auth_user', JSON.stringify(target));
+      applyLoggedInState(target);
+      showToast(`Đã chuyển vai trò: ${target.full_name}`, 'info');
     });
   });
+}
+
+// ==========================================
+// 3.1. HỆ THỐNG XÁC THỰC & ĐĂNG NHẬP PHÂN QUYỀN (AUTH & RBAC)
+// ==========================================
+function showLoginScreen() {
+  const loginScreen = document.getElementById('login-screen');
+  const appWrapper = document.getElementById('app-wrapper');
+  if (loginScreen) loginScreen.style.display = 'flex';
+  if (appWrapper) appWrapper.style.display = 'none';
+}
+
+function setupAuth() {
+  const form = document.getElementById('form-login');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('login-username').value.trim();
+      const password = document.getElementById('login-password').value;
+      await performLogin(username, password);
+    });
+  }
+
+  const btnLogout = document.getElementById('btn-logout');
+  if (btnLogout) {
+    btnLogout.addEventListener('click', performLogout);
+  }
+}
+
+window.quickLogin = async (username, password) => {
+  document.getElementById('login-username').value = username;
+  document.getElementById('login-password').value = password;
+  await performLogin(username, password);
+};
+
+async function performLogin(username, password) {
+  const btnSubmit = document.getElementById('btn-submit-login');
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerText = 'Đang xác thực...';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Đăng nhập không thành công');
+    }
+
+    localStorage.setItem('clinic_auth_user', JSON.stringify(data.user));
+    applyLoggedInState(data.user);
+    showToast(`Đăng nhập thành công! Chào mừng ${data.user.full_name}`, 'success');
+  } catch (err) {
+    showToast('Lỗi đăng nhập: ' + err.message, 'error');
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.innerText = '🔐 ĐĂNG NHẬP VÀO HỆ THỐNG';
+    }
+  }
+}
+
+function applyLoggedInState(user) {
+  state.currentUser = user;
+  state.currentRole = user.role;
+
+  // 1. Ẩn màn hình đăng nhập, mở ứng dụng làm việc
+  const loginScreen = document.getElementById('login-screen');
+  const appWrapper = document.getElementById('app-wrapper');
+  if (loginScreen) loginScreen.style.display = 'none';
+  if (appWrapper) appWrapper.style.display = 'block';
+
+  // 2. Cập nhật thông tin Header
+  const avatarMap = { ADMIN: 'AD', DOCTOR: 'BS', RECEPTIONIST: 'LT', CASHIER: 'TN', PATIENT: 'BN' };
+  const roleLabelMap = {
+    ADMIN: 'QUẢN TRỊ / DEVOPS (Toàn quyền)',
+    DOCTOR: user.doctor ? `BÁC SĨ (${user.doctor.department_name} - ${user.doctor.room_number})` : 'BÁC SĨ (Khám & Kê đơn)',
+    RECEPTIONIST: 'LỄ TÂN (Tiếp nhận & Cấp số)',
+    CASHIER: 'THU NGÂN (Viện phí & Hóa đơn)'
+  };
+
+  const avatarEl = document.getElementById('current-avatar');
+  const nameEl = document.getElementById('current-name');
+  const roleEl = document.getElementById('current-role');
+  if (avatarEl) avatarEl.innerText = avatarMap[user.role] || 'NV';
+  if (nameEl) nameEl.innerText = user.full_name;
+  if (roleEl) roleEl.innerText = roleLabelMap[user.role] || user.role;
+
+  // 3. Đồng bộ trạng thái active trên thanh demo bar
+  document.querySelectorAll('.role-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.role === user.role);
+  });
+
+  // 4. Thực thi phân quyền (RBAC Enforcement): Chỉ cho phép xem tab được cấp quyền
+  applyRolePermissions(user.role);
+
+  // 5. Tải dữ liệu ban đầu
+  loadInitialCatalogs();
+  loadAvailableDates();
+  loadDashboardData();
+}
+
+function performLogout() {
+  localStorage.removeItem('clinic_auth_user');
+  state.currentUser = null;
+  state.currentRole = null;
+  showLoginScreen();
+  const passInput = document.getElementById('login-password');
+  if (passInput) passInput.value = '';
+  showToast('Đã đăng xuất khỏi hệ thống thành công!', 'info');
 }
 
 // ==========================================
