@@ -745,42 +745,70 @@ textarea.form-control {
   border: 1.5px solid var(--border);
   border-left: 4px solid #cbd5e1;
   border-radius: var(--radius-sm);
-  padding: 14px;
-  margin-bottom: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
   background: #ffffff;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .queue-card:hover {
   border-color: var(--primary);
   border-left-color: var(--primary);
-  transform: translateX(4px);
-  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(13, 148, 136, 0.12);
 }
 
 .queue-card.active {
   border-color: var(--primary);
   border-left-color: var(--primary);
   background: #f0fdfa;
-  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.15);
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.18);
+}
+
+.queue-card.in-progress {
+  border-left-color: #059669;
+  background: #f0fdf4;
 }
 
 .queue-num {
-  font-size: 1.4rem;
+  font-size: 1.25rem;
   font-weight: 800;
   color: var(--primary);
-  width: 46px;
-  height: 46px;
+  width: 42px;
+  height: 42px;
   background: rgba(13, 148, 136, 0.1);
-  border-radius: 12px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(13, 148, 136, 0.2);
+  flex-shrink: 0;
+}
+
+.queue-num.active-num {
+  background: #059669;
+  color: #ffffff;
+  border-color: #047857;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);
+}
+
+@keyframes livePulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #16a34a;
+  display: inline-block;
+  animation: livePulse 1.8s infinite ease-in-out;
 }
 
 /* =====================================================================

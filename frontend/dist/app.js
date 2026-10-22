@@ -474,24 +474,44 @@ function populateDoctorDropdown() {
     `).join('');
   }
 
+  const roomInfoCard = document.getElementById('doctor-room-info-card');
+  const adminFilterContainer = document.getElementById('admin-doctor-filter-container');
   const filterSelect = document.getElementById('doctor-filter-select');
-  if (filterSelect) {
-    const isDoctor = state.currentUser?.role === 'DOCTOR' && state.currentUser?.doctor;
-    const currentDoctorId = isDoctor ? state.currentUser.doctor.doctor_id : null;
 
-    if (isDoctor && currentDoctorId) {
-      // Bác sĩ đang đăng nhập: Khóa cứng phòng khám vào bác sĩ đó, không cho xem/chọn phòng bác sĩ khác
+  const isDoctor = state.currentUser?.role === 'DOCTOR' && state.currentUser?.doctor;
+  const currentDoctorId = isDoctor ? state.currentUser.doctor.doctor_id : null;
+
+  if (isDoctor && currentDoctorId) {
+    // 1. VỚI BÁC SĨ: Ẩn hoàn toàn dropdown bộ lọc, hiển thị Thẻ Thông Tin Phòng Khám Chuyên Nghiệp
+    if (adminFilterContainer) adminFilterContainer.style.display = 'none';
+    if (roomInfoCard) {
+      roomInfoCard.style.display = 'block';
       const myDoctor = state.doctors.find(d => String(d.id) === String(currentDoctorId)) || state.currentUser.doctor;
-      const docName = myDoctor.full_name || state.currentUser.full_name;
-      const deptName = myDoctor.department_name || state.currentUser.doctor.department_name;
-      const roomNum = myDoctor.room_number || state.currentUser.doctor.room_number;
-      filterSelect.innerHTML = `<option value="${currentDoctorId}">🔒 BS. ${docName} - ${deptName} (${roomNum})</option>`;
+      const rawName = (myDoctor.full_name || state.currentUser.full_name || '').trim();
+      // Làm sạch tiền tố để không bao giờ bị lặp "BS. BS."
+      const cleanName = rawName.replace(/^BS\.?\s*(CK\d+\.?\s*)?/i, '');
+      const docPrefix = rawName.includes('CK') ? (rawName.match(/BS\.?\s*CK\d+\.?/i)?.[0] || 'BS CK.') : 'BS.';
+      const formattedDocName = `${docPrefix} ${cleanName}`.trim();
+      
+      const elRoomBadge = document.getElementById('room-badge-pill');
+      const elDocName = document.getElementById('room-doc-name');
+      const elDeptName = document.getElementById('room-dept-name');
+      
+      if (elRoomBadge) elRoomBadge.innerHTML = `🏥 Phòng ${myDoctor.room_number || state.currentUser.doctor.room_number || 'P.102'}`;
+      if (elDocName) elDocName.innerText = formattedDocName;
+      if (elDeptName) elDeptName.innerText = myDoctor.department_name || state.currentUser.doctor.department_name || 'Khoa Khám Bệnh';
+    }
+
+    if (filterSelect) {
       filterSelect.value = String(currentDoctorId);
       filterSelect.disabled = true;
-      filterSelect.style.backgroundColor = '#f1f5f9';
-      filterSelect.style.cursor = 'not-allowed';
-      filterSelect.title = 'Phòng khám được khóa tự động theo tài khoản Bác sĩ đang trực';
-    } else {
+    }
+  } else {
+    // 2. VỚI ADMIN / DEVOPS: Hiện bộ lọc để Admin có thể xem hàng đợi của từng phòng khám
+    if (roomInfoCard) roomInfoCard.style.display = 'none';
+    if (adminFilterContainer) adminFilterContainer.style.display = 'block';
+
+    if (filterSelect) {
       filterSelect.disabled = false;
       filterSelect.style.backgroundColor = '';
       filterSelect.style.cursor = 'default';
@@ -858,6 +878,12 @@ window.startExamFromReception = (appointmentId) => {
 // ==========================================
 async function loadDoctorQueue() {
   const queueContainer = document.getElementById('doctor-queue-list');
+  const badgeCountEl = document.getElementById('queue-badge-count');
+  const btnCallNext = document.getElementById('btn-call-next-patient');
+  const emptyActionContainer = document.getElementById('empty-state-action-container');
+  const waitingStatEl = document.getElementById('doc-queue-waiting-count');
+  const completedStatEl = document.getElementById('doc-queue-completed-count');
+
   try {
     const res = await fetch(`${API_BASE}/appointments`);
     if (!res.ok) return;
@@ -870,31 +896,92 @@ async function loadDoctorQueue() {
     // Nếu là Bác sĩ: bắt buộc lọc theo phòng của chính mình, không tải bệnh nhân của bác sĩ khác
     const selectedDoctorId = isDoctor ? String(currentDoctorId) : (filterSelect ? filterSelect.value : 'all');
 
-    let waitingOrActive = state.appointments.filter(a => a.status === 'WAITING' || a.status === 'IN_PROGRESS');
-    if (selectedDoctorId && selectedDoctorId !== 'all') {
-      waitingOrActive = waitingOrActive.filter(a => String(a.doctor_id) === String(selectedDoctorId));
+    // Toàn bộ danh sách ca khám thuộc phòng khám này
+    const allForDoctor = (selectedDoctorId && selectedDoctorId !== 'all')
+      ? state.appointments.filter(a => String(a.doctor_id) === String(selectedDoctorId))
+      : state.appointments;
+
+    const waitingList = allForDoctor.filter(a => a.status === 'WAITING');
+    const inProgressList = allForDoctor.filter(a => a.status === 'IN_PROGRESS');
+    const completedList = allForDoctor.filter(a => a.status === 'COMPLETED');
+    const waitingOrActive = [...inProgressList, ...waitingList];
+
+    // Cập nhật bộ đếm thống kê mini phòng khám
+    if (waitingStatEl) waitingStatEl.innerText = waitingList.length;
+    if (completedStatEl) completedStatEl.innerText = completedList.length;
+    if (badgeCountEl) badgeCountEl.innerText = `${waitingOrActive.length} ca`;
+
+    // Cập nhật nút tắt Mời ca tiếp theo (Call Next Patient)
+    const nextWaiting = waitingList[0];
+    if (nextWaiting) {
+      if (btnCallNext) {
+        btnCallNext.style.display = 'block';
+        btnCallNext.innerHTML = `📢 Mời Ca Tiếp: <strong>#${String(nextWaiting.queue_number).padStart(2, '0')} - ${nextWaiting.patient_name}</strong>`;
+        btnCallNext.onclick = () => selectDoctorPatient(nextWaiting.id);
+      }
+      if (emptyActionContainer) {
+        emptyActionContainer.innerHTML = `
+          <button type="button" class="btn btn-primary" onclick="selectDoctorPatient(${nextWaiting.id})" style="font-weight: 700; padding: 11px 22px; font-size: 0.92rem; box-shadow: 0 4px 14px rgba(13, 148, 136, 0.28);">
+            🩺 Mời Khám Ngay: #${String(nextWaiting.queue_number).padStart(2, '0')} - ${nextWaiting.patient_name}
+          </button>
+        `;
+      }
+    } else {
+      if (btnCallNext) btnCallNext.style.display = 'none';
+      if (emptyActionContainer) {
+        emptyActionContainer.innerHTML = inProgressList.length > 0
+          ? `<span style="color: #059669; font-weight: 700; font-size: 0.9rem;">🩺 Hiện có 1 bệnh nhân đang trong phòng khám</span>`
+          : `<span style="color: var(--text-muted); font-size: 0.88rem;">🎉 Hiện tại phòng khám không còn bệnh nhân nào đang chờ</span>`;
+      }
     }
 
     if (waitingOrActive.length === 0) {
-      queueContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; padding: 20px; text-align: center;">Hiện không có bệnh nhân nào chờ khám.</p>';
+      queueContainer.innerHTML = `
+        <div style="text-align: center; padding: 32px 14px; color: var(--text-muted);">
+          <div style="font-size: 2rem; margin-bottom: 8px;">☕</div>
+          <div style="font-weight: 700; color: var(--dark); font-size: 0.9rem;">Hàng chờ đang trống</div>
+          <div style="font-size: 0.78rem; margin-top: 4px;">Hiện không có bệnh nhân nào chờ khám tại phòng này.</div>
+        </div>
+      `;
       return;
     }
 
-    queueContainer.innerHTML = waitingOrActive.map(a => `
-      <div class="queue-card ${state.selectedAppointment?.id == a.id ? 'active' : ''}" onclick="selectDoctorPatient(${a.id})">
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <div class="queue-num">${String(a.queue_number).padStart(2, '0')}</div>
-          <div>
-            <strong style="color: var(--dark); font-size: 0.95rem;">${a.patient_name}</strong>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">${a.patient_phone || a.identity_card}</div>
-            <div style="font-size: 0.72rem; color: var(--primary); font-weight: 700; margin-top: 2px;">👨‍⚕️ ${a.doctor_name || 'BS Phụ trách'} <span style="color: var(--text-muted);">(${a.room_number || 'P.102'})</span></div>
+    queueContainer.innerHTML = waitingOrActive.map(a => {
+      const isSelected = state.selectedAppointment?.id == a.id;
+      const isInProgress = a.status === 'IN_PROGRESS';
+      const cleanSymptoms = (a.symptoms || 'Khám bệnh').trim();
+      return `
+        <div class="queue-card ${isSelected ? 'active' : ''} ${isInProgress ? 'in-progress' : ''}" onclick="selectDoctorPatient(${a.id})">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div class="queue-num ${isInProgress ? 'active-num' : ''}">
+                ${String(a.queue_number).padStart(2, '0')}
+              </div>
+              <div>
+                <div style="font-weight: 800; color: var(--dark); font-size: 0.95rem; line-height: 1.3;">${a.patient_name}</div>
+                <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 2px;">
+                  <span>📞 ${a.patient_phone || '--'}</span>
+                  ${a.identity_card ? `<span style="margin-left: 6px;">• CCCD: ${a.identity_card}</span>` : ''}
+                </div>
+              </div>
+            </div>
+            <span class="badge ${isInProgress ? 'badge-in_progress' : 'badge-waiting'}" style="font-size: 0.7rem; padding: 4px 8px;">
+              ${isInProgress ? '🩺 Đang khám' : '⏳ Chờ khám'}
+            </span>
+          </div>
+
+          <!-- Dòng tóm tắt triệu chứng & gợi ý hành động -->
+          <div style="font-size: 0.76rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 8px; color: #334155; margin-top: 2px; display: flex; align-items: center; justify-content: space-between;">
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;">
+              🩺 <strong>Lý do:</strong> "${cleanSymptoms}"
+            </span>
+            <span style="font-size: 0.72rem; color: var(--primary); font-weight: 700; white-space: nowrap; margin-left: 6px;">
+              ${isInProgress ? 'Vào phòng' : 'Mời khám 👉'}
+            </span>
           </div>
         </div>
-        <span class="badge ${a.status === 'IN_PROGRESS' ? 'badge-in_progress' : 'badge-waiting'}">
-          ${a.status === 'IN_PROGRESS' ? 'Đang khám' : 'Chờ'}
-        </span>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   } catch (err) {
     queueContainer.innerHTML = `<p style="color: var(--danger);">Lỗi tải hàng đợi: ${err.message}</p>`;
   }
@@ -1068,7 +1155,9 @@ function setupDoctorExamForm() {
     });
   }
 
-  btnRefreshQueue.addEventListener('click', loadDoctorQueue);
+  if (btnRefreshQueue) btnRefreshQueue.addEventListener('click', loadDoctorQueue);
+  const btnRefreshDoc = document.getElementById('btn-refresh-doctor-queue');
+  if (btnRefreshDoc) btnRefreshDoc.addEventListener('click', loadDoctorQueue);
 
   // Nút xác nhận chính thức mời bệnh nhân vào phòng & bắt đầu khám
   const btnStartExam = document.getElementById('btn-start-exam');
