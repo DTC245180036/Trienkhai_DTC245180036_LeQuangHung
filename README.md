@@ -17,7 +17,7 @@
 Hệ thống được đóng gói và điều phối hoàn toàn qua **Docker Compose** bao gồm 8 container dịch vụ độc lập, chia làm 3 vùng mạng cách ly:
 
 1. **`clinic_proxy` (Nginx:alpine):** Đóng vai trò Reverse Proxy biên, lắng nghe cổng 80 (HTTP) và 443 (HTTPS), áp dụng Rate Limiting `rate=10r/s burst=20`, nén Gzip, phục vụ trực tiếp file ảnh X-quang/siêu âm dung lượng tới 50MB qua Docker volume tĩnh.
-2. **`clinic_frontend` (Nginx:alpine):** Cung cấp giao diện Web Portal SPA hiện đại với phân quyền RBAC 4 vai trò y tế.
+2. **`clinic_frontend` (Nginx:alpine):** Cung cấp giao diện Web Portal SPA hiện đại với phân quyền RBAC 4 vai trò y tế, bộ lọc thời gian khám theo ngày linh hoạt và giám sát tài chính live.
 3. **`clinic_api` (Node.js 18 Alpine):** Backend API xử lý nghiệp vụ khám bệnh, kết nối CSDL, xuất OpenMetrics tại `/metrics` và healthcheck tại `/health`.
 4. **`clinic_db` (PostgreSQL 15 Alpine):** Cơ sở dữ liệu bệnh án 10 bảng chuẩn hóa 3NF, lưu trữ bền vững trên volume `pgdata`, bảo vệ nghiêm ngặt trong mạng nội bộ `backend_net` (cấm map port ra ngoài).
 5. **`clinic_redis` (Redis 7 Alpine):** Bộ nhớ đệm và cấp số thứ tự nguyên tử `INCR clinic:queue_counter:<date>` chống Race Condition và cache danh mục y tế.
@@ -31,7 +31,7 @@ Hệ thống được đóng gói và điều phối hoàn toàn qua **Docker Co
 
 | Dịch vụ / Phân hệ | Đường dẫn truy cập | Tài khoản | Mật khẩu | Chức năng nghiệp vụ |
 | :--- | :--- | :--- | :--- | :--- |
-| **Cổng Tiếp Tân** | [http://localhost](http://localhost) | `letan01` | `123456` | Tiếp nhận bệnh nhân, cấp số khám tự động |
+| **Cổng Tiếp Tân** | [http://localhost](http://localhost) | `letan01` | `123456` | Tiếp nhận bệnh nhân, cấp số khám tự động, lọc lịch sử theo ngày |
 | **Bác Sĩ Khám (P.102)** | [http://localhost](http://localhost) | `bacsi_nam` | `123456` | Khám EMR, nhập sinh hiệu, chỉ định CLS, kê đơn |
 | **Bác Sĩ Khám (P.201)** | [http://localhost](http://localhost) | `bacsi_hoa` | `123456` | Khám chuyên khoa Tai Mũi Họng, chỉ định thuốc |
 | **Quầy Thu Ngân** | [http://localhost](http://localhost) | `thungan01` | `123456` | Thu tiền viện phí (Tiền mặt / QR Pay), in phiếu thu |
