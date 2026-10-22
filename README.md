@@ -29,14 +29,14 @@ Hệ thống được đóng gói và điều phối hoàn toàn qua **Docker Co
 
 ## II. BẢNG TỔNG HỢP TÀI KHOẢN VÀ CỔNG TRUY CẬP
 
-| Dịch vụ / Phân hệ | Đường dẫn truy cập | Tài khoản | Mật khẩu | Chức năng nghiệp vụ |
+| Dịch vụ / Phân hệ | Đường dẫn truy cập | Tài khoản | Mật khẩu | Quyền hạn & Chức năng nghiệp vụ |
 | :--- | :--- | :--- | :--- | :--- |
-| **Cổng Tiếp Tân** | [http://localhost](http://localhost) | `letan01` | `123456` | Tiếp nhận bệnh nhân, cấp số khám tự động, lọc lịch sử theo ngày |
-| **Bác Sĩ Khám (P.102)** | [http://localhost](http://localhost) | `bacsi_nam` | `123456` | Khám EMR, nhập sinh hiệu, chỉ định CLS, kê đơn |
-| **Bác Sĩ Khám (P.201)** | [http://localhost](http://localhost) | `bacsi_hoa` | `123456` | Khám chuyên khoa Tai Mũi Họng, chỉ định thuốc |
-| **Quầy Thu Ngân** | [http://localhost](http://localhost) | `thungan01` | `123456` | Thu tiền viện phí (Tiền mặt / QR Pay), in phiếu thu |
-| **Quản Trị / DevOps** | [http://localhost](http://localhost) | `admin` | `123456` | Xem sơ đồ mạng, bắn tải test DoS, diễn tập phục hồi |
-| **Grafana Monitoring** | [http://localhost:3000](http://localhost:3000) | `admin` | `admin` | Giám sát 8 metrics panel (Doanh thu live, CPU, RAM) |
+| **Cổng Tiếp Tân** | [http://localhost](http://localhost) | `letan01` | `123456` | Tiếp nhận bệnh nhân, kiểm tra hợp lệ CCCD & SĐT, cấp số khám tự động qua Redis, in phiếu số |
+| **Bác Sĩ Khám (P.102)** | [http://localhost](http://localhost) | `bacsi_nam` | `123456` | Mời bệnh nhân vào phòng, khám EMR, nhập sinh hiệu, chẩn đoán, kê đơn theo vỉ/hộp, tạo viện phí |
+| **Bác Sĩ Khám (P.201)** | [http://localhost](http://localhost) | `bacsi_hoa` | `123456` | Khám Tai Mũi Họng, chỉ định CLS & nội soi, kê đơn thuốc chuẩn dược |
+| **Quầy Thu Ngân** | [http://localhost](http://localhost) | `thungan01` | `123456` | Thu tiền viện phí (Tiền mặt / QR Pay), in phiếu thu, xuất bảng kê chốt ca trực ra file Word (.doc) |
+| **Quản Trị / DevOps** | [http://localhost](http://localhost) | `admin` | `123456` | **Chế độ Giám sát toàn quyền:** Giám sát hàng đợi tiếp đón, tiến độ phòng khám, đối soát tài chính, xem sơ đồ hạ tầng, bắn tải test DoS, xuất báo cáo Word. *(Khóa tác nghiệp thu tiền và cấp số để đảm bảo tính minh bạch kiểm toán)* |
+| **Grafana Monitoring** | [http://localhost:3000](http://localhost:3000) | `admin` | `admin` | Giám sát 8 metrics panel (Doanh thu live, CPU, RAM, Network I/O) |
 | **Prometheus TSDB** | [http://localhost:9090](http://localhost:9090) | *(Nội bộ)* | *(Nội bộ)* | Truy vấn PromQL, kiểm tra Scrape Targets |
 | **API Healthcheck** | [http://localhost/api/health](http://localhost/api/health) | Công khai | Không | Kiểm tra trạng thái DB, Redis và Uptime |
 | **API Metrics** | [http://localhost/api/metrics](http://localhost/api/metrics) | Nội bộ | Không | Cung cấp dữ liệu theo chuẩn OpenMetrics |
@@ -89,10 +89,21 @@ docker exec -i clinic_db psql -U clinic_admin -d clinic_management -c "SELECT co
 
 ---
 
-## V. CÁC BIỆN PHÁP GIA CỐ BẢO MẬT (HARDENING)
+## V. CÁC BIỆN PHÁP GIA CỐ BẢO MẬT & QUY TẮC NGHIỆP VỤ Y TẾ
 1. **Network Isolation:** Phân chia 3 vùng mạng bridge (`frontend_net`, `backend_net`, `monitor_net`). PostgreSQL cấm map port ra ngoài.
 2. **Bảo mật Biến môi trường:** Tệp `.env` được bảo vệ và loại trừ khỏi Git qua `.gitignore`.
 3. **Healthcheck Condition:** Backend chỉ khởi động khi PostgreSQL sẵn sàng qua lệnh `pg_isready`.
 4. **Persistent Volumes:** Dữ liệu CSDL lưu tại `pgdata` và ảnh lưu tại `clinic_static`, không bị mất khi restart container.
 5. **Nginx Rate Limiting:** Giới hạn 10 req/s burst 20, chống spam cấp số khám và DoS.
-6. **RBAC Enforcement:** Phân quyền nghiêm ngặt giữa 4 tác nhân Tiếp tân, Bác sĩ, Thu ngân và Admin.
+6. **RBAC Enforcement (Chặt chẽ 2 lớp UI & API):**
+   * Quản trị viên (`ADMIN`) có quyền giám sát toàn bộ luồng, kiểm toán hóa đơn, xem hạ tầng và xuất báo cáo Word; nhưng **bị khóa các thao tác tác nghiệp** (cấp số, khám bệnh, thu tiền).
+   * Lễ tân (`RECEPTIONIST`) chỉ được cấp số và tiếp nhận bệnh nhân.
+   * Bác sĩ (`DOCTOR`) chỉ được khám và kê đơn cho bệnh nhân được phân công; bắt buộc phải mời bệnh nhân vào phòng (`IN_PROGRESS`) trước khi lưu bệnh án.
+   * Thu ngân (`CASHIER`) phụ trách thu tiền viện phí (tiền mặt/QR) và xuất biên bản chốt ca.
+7. **Quy chuẩn dữ liệu y tế & Chống xung đột định danh:**
+   * Bắt buộc họ tên tiếng Việt đầy đủ (ít nhất 2 từ), CCCD đúng 12 chữ số, SĐT đúng 10 số.
+   * Chặn trùng số CCCD hoặc SĐT nhưng khác họ tên để tránh xung đột hồ sơ bệnh án.
+   * Kê đơn thuốc theo đơn vị chuẩn y tế bệnh viện: Vỉ, Hộp, Chai/Lọ.
+8. **Xuất báo cáo tài chính chuẩn Microsoft Word (.doc):**
+   * Hỗ trợ xuất biên bản chốt ca thu ngân và báo cáo doanh thu phòng khám ra file Word (.doc) khổ A4 chuẩn hóa có chữ ký kiểm toán.
+
