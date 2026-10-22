@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupDoctorExamForm();
   setupStressTest();
   setupReceptionDateFilter();
+  setupRevenueReportEvents();
   setupAuth();
 
   // Khởi động kiểm tra máy chủ & trạng thái container
@@ -109,6 +110,7 @@ function switchTab(targetId) {
   if (targetId === 'tab-doctor') loadDoctorQueue();
   if (targetId === 'tab-cashier') loadInvoices();
   if (targetId === 'tab-reception') loadAppointments();
+  if (targetId === 'tab-admin') loadRevenueReport();
 }
 
 function applyRolePermissions(role) {
@@ -1060,12 +1062,40 @@ function addPrescriptionRow(medId = '', qty = 10, instr = 'Uống sau bữa ăn,
 async function loadInvoices() {
   const tbody = document.getElementById('invoices-tbody');
   const btnRefresh = document.getElementById('btn-refresh-invoices');
-  btnRefresh.onclick = loadInvoices;
+  if (btnRefresh) btnRefresh.onclick = loadInvoices;
 
   try {
     const res = await fetch(`${API_BASE}/invoices`);
     if (!res.ok) throw new Error('Không thể tải danh sách hóa đơn');
     state.invoices = await res.json();
+
+    // Cập nhật Bảng kê chốt quỹ ca thu ngân
+    let shiftTotal = 0;
+    let shiftCash = 0;
+    let shiftTransfer = 0;
+    let shiftUnpaid = 0;
+
+    (state.invoices || []).forEach(inv => {
+      const amt = parseFloat(inv.total_amount) || 0;
+      if (inv.payment_status === 'PAID') {
+        shiftTotal += amt;
+        if (inv.payment_method === 'CASH') shiftCash += amt;
+        else shiftTransfer += amt;
+      } else {
+        shiftUnpaid += amt;
+      }
+    });
+
+    const fmt = (n) => new Intl.NumberFormat('vi-VN').format(n || 0) + ' đ';
+    const elTot = document.getElementById('cashier-shift-total');
+    const elCash = document.getElementById('cashier-shift-cash');
+    const elTrans = document.getElementById('cashier-shift-transfer');
+    const elUnp = document.getElementById('cashier-shift-unpaid');
+
+    if (elTot) elTot.innerText = fmt(shiftTotal);
+    if (elCash) elCash.innerText = fmt(shiftCash);
+    if (elTrans) elTrans.innerText = fmt(shiftTransfer);
+    if (elUnp) elUnp.innerText = fmt(shiftUnpaid);
 
     if (state.invoices.length === 0) {
       tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">Chưa có hóa đơn nào được phát sinh.</td></tr>`;
@@ -1111,6 +1141,7 @@ window.payInvoice = async (invoiceId, method) => {
     showToast(`Đã xác nhận thu tiền thành công cho hóa đơn #HD-${invoiceId}!`, 'success');
     await loadInvoices();
     await loadStats();
+    if (typeof loadRevenueReport === 'function') await loadRevenueReport();
   } catch (err) {
     showToast('Lỗi: ' + err.message, 'error');
   }
@@ -1229,4 +1260,504 @@ function setupStressTest() {
     `;
     showToast(`Test tải hoàn tất: Chặn ${rateLimitedCount} requests vượt ngưỡng!`, 'info');
   });
+}
+
+// ==========================================
+// 9. BÁO CÁO THỐNG KÊ DOANH THU CHUẨN PHÒNG KHÁM / BỆNH VIỆN (ADMIN & TÀI CHÍNH)
+// ==========================================
+let currentReportData = null;
+
+async function loadRevenueReport(targetDate = null) {
+  const dateFilter = document.getElementById('report-date-filter');
+  const customDateInput = document.getElementById('report-custom-date');
+  
+  let dateParam = targetDate;
+  if (!dateParam && dateFilter) {
+    if (dateFilter.value === 'custom') {
+      dateParam = (customDateInput && customDateInput.value) ? customDateInput.value : 'today';
+    } else {
+      dateParam = dateFilter.value;
+    }
+  }
+  if (!dateParam) dateParam = 'today';
+
+  try {
+    const res = await fetch(`${API_BASE}/stats/revenue-report?date=${dateParam}`);
+    if (!res.ok) throw new Error('Không thể tải báo cáo doanh thu');
+    const data = await res.json();
+    currentReportData = data;
+
+    const fmt = (n) => new Intl.NumberFormat('vi-VN').format(n || 0) + ' đ';
+
+    // 1. Thẻ chỉ số tổng
+    const elTotRev = document.getElementById('rep-total-revenue');
+    const elPaidCount = document.getElementById('rep-paid-count');
+    const elExamFee = document.getElementById('rep-exam-fee');
+    const elClsFee = document.getElementById('rep-cls-fee');
+    const elMedFee = document.getElementById('rep-med-fee');
+
+    if (elTotRev) elTotRev.innerText = fmt(data.summary.total_revenue);
+    if (elPaidCount) elPaidCount.innerText = `Đã thu: ${data.summary.paid_count} hóa đơn`;
+    if (elExamFee) elExamFee.innerText = fmt(data.summary.exam_fee_total);
+    if (elClsFee) elClsFee.innerText = fmt(data.summary.cls_fee_total);
+    if (elMedFee) elMedFee.innerText = fmt(data.summary.medicine_fee_total);
+
+    // 2. Bảng doanh thu theo 4 Bác sĩ
+    const docTbody = document.getElementById('rep-doctor-tbody');
+    if (docTbody && data.by_doctor) {
+      if (data.by_doctor.length === 0) {
+        docTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 16px;">Chưa có dữ liệu</td></tr>`;
+      } else {
+        docTbody.innerHTML = data.by_doctor.map(doc => `
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 10px;">
+              <strong>${doc.doctor_name}</strong>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">${doc.department_name}</div>
+            </td>
+            <td style="padding: 10px; text-align: center; font-weight: 700; color: var(--primary);">
+              ${doc.completed_count} ca
+            </td>
+            <td style="padding: 10px; text-align: right; font-weight: 700; color: #047857;">
+              ${fmt(doc.doctor_revenue)}
+            </td>
+            <td style="padding: 10px; text-align: right;">
+              <span class="badge" style="background: #f0fdf4; color: #166534; font-weight: 700;">${doc.percentage}%</span>
+            </td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    // 3. Đối soát hình thức thanh toán & phân bổ
+    const elCash = document.getElementById('rep-cash-amount');
+    const elCashBar = document.getElementById('rep-cash-bar');
+    const elTrans = document.getElementById('rep-transfer-amount');
+    const elTransBar = document.getElementById('rep-transfer-bar');
+    const elInvoicesCount = document.getElementById('rep-total-invoices-count');
+    const elUnpaid = document.getElementById('rep-unpaid-amount');
+
+    const totRev = data.summary.total_revenue || 0;
+    const cashPct = totRev > 0 ? Math.round((data.summary.cash_revenue / totRev) * 100) : 0;
+    const transPct = totRev > 0 ? Math.round((data.summary.transfer_revenue / totRev) * 100) : 0;
+
+    if (elCash) elCash.innerText = `${fmt(data.summary.cash_revenue)} (${cashPct}%)`;
+    if (elCashBar) elCashBar.style.width = `${cashPct}%`;
+    if (elTrans) elTrans.innerText = `${fmt(data.summary.transfer_revenue)} (${transPct}%)`;
+    if (elTransBar) elTransBar.style.width = `${transPct}%`;
+
+    const totalInvoices = (data.summary.paid_count || 0) + (data.summary.unpaid_count || 0);
+    if (elInvoicesCount) elInvoicesCount.innerText = `${totalInvoices} hóa đơn (Đã thu: ${data.summary.paid_count})`;
+    if (elUnpaid) elUnpaid.innerText = `${fmt(data.summary.unpaid_revenue)} (${data.summary.unpaid_count} hóa đơn)`;
+
+  } catch (err) {
+    console.error('Lỗi tải báo cáo doanh thu:', err);
+  }
+}
+
+function setupRevenueReportEvents() {
+  const dateFilter = document.getElementById('report-date-filter');
+  const customInput = document.getElementById('report-custom-date');
+  const btnRefresh = document.getElementById('btn-refresh-report');
+  const btnPrint = document.getElementById('btn-print-report');
+  const btnExport = document.getElementById('btn-export-csv');
+  const btnCashierPrintShift = document.getElementById('btn-cashier-print-shift');
+
+  if (dateFilter) {
+    dateFilter.addEventListener('change', () => {
+      if (dateFilter.value === 'custom') {
+        if (customInput) {
+          customInput.style.display = 'inline-block';
+          if (!customInput.value) {
+            const today = new Date().toISOString().split('T')[0];
+            customInput.value = today;
+          }
+          loadRevenueReport(customInput.value);
+        }
+      } else {
+        if (customInput) customInput.style.display = 'none';
+        loadRevenueReport(dateFilter.value);
+      }
+    });
+  }
+
+  if (customInput) {
+    customInput.addEventListener('change', () => {
+      loadRevenueReport(customInput.value);
+    });
+  }
+
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', () => {
+      loadRevenueReport();
+      showToast('Đã làm mới số liệu báo cáo doanh thu!', 'success');
+    });
+  }
+
+  if (btnExport) {
+    btnExport.addEventListener('click', exportRevenueCSV);
+  }
+
+  if (btnPrint) {
+    btnPrint.addEventListener('click', printRevenueReportA4);
+  }
+
+  if (btnCashierPrintShift) {
+    btnCashierPrintShift.addEventListener('click', printCashierShiftHandover);
+  }
+}
+
+function printRevenueReportA4() {
+  if (!currentReportData) {
+    showToast('Chưa có dữ liệu báo cáo để in!', 'error');
+    return;
+  }
+  const data = currentReportData;
+  const fmt = (n) => new Intl.NumberFormat('vi-VN').format(n || 0) + ' đ';
+  const now = new Date();
+  const printDateStr = `${now.getDate()} tháng ${now.getMonth() + 1} năm ${now.getFullYear()}`;
+  const printTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  let periodTitle = "Hôm nay";
+  if (data.selected_date === 'all') periodTitle = "Toàn bộ tích lũy đến hiện tại";
+  else if (data.selected_date && data.selected_date !== 'today') periodTitle = `Ngày ${data.selected_date}`;
+
+  const docRows = (data.by_doctor || []).map((doc, idx) => `
+    <tr>
+      <td style="text-align: center; padding: 6px;">${idx + 1}</td>
+      <td style="padding: 6px;"><strong>${doc.doctor_name}</strong></td>
+      <td style="padding: 6px;">${doc.department_name}</td>
+      <td style="text-align: center; padding: 6px;">${doc.completed_count}</td>
+      <td style="text-align: right; padding: 6px; font-weight: bold;">${fmt(doc.doctor_revenue)}</td>
+      <td style="text-align: center; padding: 6px;">${doc.percentage}%</td>
+    </tr>
+  `).join('');
+
+  const win = window.open('', '_blank', 'width=850,height=900');
+  if (!win) return;
+  win.document.write(`
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+      <meta charset="utf-8">
+      <title>Báo Cáo Doanh Thu Phòng Khám - ${periodTitle}</title>
+      <style>
+        @page { size: A4; margin: 15mm; }
+        body { font-family: 'Times New Roman', serif; font-size: 13pt; line-height: 1.4; color: #000; margin: 0; padding: 10px; }
+        .header { display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .header-left { text-align: left; }
+        .header-right { text-align: center; }
+        .report-title { text-align: center; margin: 25px 0 15px 0; }
+        .report-title h2 { margin: 0; font-size: 16pt; font-weight: bold; text-transform: uppercase; }
+        .report-title p { margin: 5px 0 0 0; font-style: italic; font-size: 12pt; }
+        table { width: 100%; border-collapse: collapse; margin: 12px 0 20px 0; font-size: 11pt; }
+        th, td { border: 1px solid #333; padding: 6px 8px; }
+        th { background: #f0f0f0; font-weight: bold; }
+        .section-title { font-weight: bold; margin-top: 15px; font-size: 12pt; text-transform: uppercase; }
+        .signatures { display: flex; justify-content: space-between; margin-top: 40px; text-align: center; page-break-inside: avoid; }
+        .sig-block { width: 30%; }
+        .sig-space { height: 75px; }
+        @media print {
+          .no-print { display: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="no-print" style="margin-bottom: 20px; text-align: right;">
+        <button onclick="window.print()" style="padding: 8px 18px; font-size: 14px; font-weight: bold; background: #0d9488; color: #fff; border: none; border-radius: 6px; cursor: pointer;">🖨️ In Báo Cáo Này (Khổ A4)</button>
+        <button onclick="window.close()" style="padding: 8px 14px; font-size: 14px; border: 1px solid #ccc; background: #f8fafc; border-radius: 6px; cursor: pointer; margin-left: 8px;">Đóng</button>
+      </div>
+
+      <div class="header">
+        <div class="header-left">
+          <strong>SỞ Y TẾ TP. HÀ NỘI</strong><br>
+          <strong>PHÒNG KHÁM ĐA KHOA QUỐC TẾ DTC</strong><br>
+          <span style="font-size: 10pt;">Địa chỉ: 123 Đường Giải Phóng, Hà Nội<br>Điện thoại: 1900 6868</span>
+        </div>
+        <div class="header-right">
+          <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br>
+          <strong>Độc lập - Tự do - Hạnh phúc</strong><br>
+          <span style="font-size: 10pt;">------------------</span>
+        </div>
+      </div>
+
+      <div class="report-title">
+        <h2>BÁO CÁO THỐNG KÊ TỔNG HỢP DOANH THU & HIỆU SUẤT KHÁM CHỮA BỆNH</h2>
+        <p>Kỳ báo cáo: <strong>${periodTitle}</strong> (Thời điểm xuất biểu: ${printTimeStr}, ngày ${printDateStr})</p>
+      </div>
+
+      <div class="section-title">I. TỔNG HỢP CƠ CẤU DOANH THU & NGUỒN THU</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 50px;">STT</th>
+            <th>Danh Mục Doanh Thu</th>
+            <th style="width: 150px; text-align: center;">Đơn Vị Tính</th>
+            <th style="width: 180px; text-align: right;">Thành Tiền (VNĐ)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="text-align: center;">1</td>
+            <td><strong>Doanh thu tiền khám bệnh chuyên khoa</strong> (Định mức 50.000 đ/lượt)</td>
+            <td style="text-align: center;">${data.summary.paid_count} lượt</td>
+            <td style="text-align: right; font-weight: bold;">${fmt(data.summary.exam_fee_total)}</td>
+          </tr>
+          <tr>
+            <td style="text-align: center;">2</td>
+            <td><strong>Doanh thu dịch vụ Cận Lâm Sàng</strong> (Chụp X-quang, Siêu âm, Xét nghiệm)</td>
+            <td style="text-align: center;">Theo chỉ định</td>
+            <td style="text-align: right; font-weight: bold;">${fmt(data.summary.cls_fee_total)}</td>
+          </tr>
+          <tr>
+            <td style="text-align: center;">3</td>
+            <td><strong>Doanh thu bán thuốc & dược phẩm</strong> (Theo đơn điều trị)</td>
+            <td style="text-align: center;">Theo đơn thuốc</td>
+            <td style="text-align: right; font-weight: bold;">${fmt(data.summary.medicine_fee_total)}</td>
+          </tr>
+          <tr style="background: #f9f9f9; font-weight: bold;">
+            <td colspan="3" style="text-align: right; text-transform: uppercase;">TỔNG CỘNG DOANH THU THỰC THU:</td>
+            <td style="text-align: right; color: #047857; font-size: 12pt;">${fmt(data.summary.total_revenue)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="section-title">II. THỐNG KÊ CHI TIẾT THEO BÁC SĨ & CHUYÊN KHOA</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 50px;">STT</th>
+            <th>Họ và Tên Bác Sĩ</th>
+            <th>Khoa / Phòng Khám</th>
+            <th style="width: 110px; text-align: center;">Số Ca Khám</th>
+            <th style="width: 160px; text-align: right;">Doanh Thu (VNĐ)</th>
+            <th style="width: 80px; text-align: center;">Tỷ Trọng</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${docRows}
+        </tbody>
+      </table>
+
+      <div class="section-title">III. PHƯƠNG THỨC THU & ĐỐI SOÁT QUỸ TIỀN TỆ</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Hình Thức Thu Viện Phí</th>
+            <th style="width: 180px; text-align: right;">Số Tiền Đã Thu (VNĐ)</th>
+            <th style="width: 140px; text-align: center;">Tỷ Lệ</th>
+            <th>Ghi Chú Nghiệp Vụ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. Tiền mặt (Cash)</strong></td>
+            <td style="text-align: right; font-weight: bold;">${fmt(data.summary.cash_revenue)}</td>
+            <td style="text-align: center;">${data.summary.total_revenue > 0 ? Math.round((data.summary.cash_revenue / data.summary.total_revenue) * 100) : 0}%</td>
+            <td>Kiểm đếm tại két thu ngân</td>
+          </tr>
+          <tr>
+            <td><strong>2. Chuyển khoản ngân hàng (VietQR / POS)</strong></td>
+            <td style="text-align: right; font-weight: bold;">${fmt(data.summary.transfer_revenue)}</td>
+            <td style="text-align: center;">${data.summary.total_revenue > 0 ? Math.round((data.summary.transfer_revenue / data.summary.total_revenue) * 100) : 0}%</td>
+            <td>Tài khoản thanh toán phòng khám</td>
+          </tr>
+          <tr>
+            <td><strong>3. Hóa đơn chưa thanh toán (Công nợ)</strong></td>
+            <td style="text-align: right; color: red;">${fmt(data.summary.unpaid_revenue)}</td>
+            <td style="text-align: center;">${data.summary.unpaid_count} hóa đơn</td>
+            <td>Bệnh nhân đang chờ đóng viện phí</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="font-style: italic; text-align: right; margin-top: 25px;">
+        Hà Nội, ngày ${printDateStr}
+      </div>
+
+      <div class="signatures">
+        <div class="sig-block">
+          <strong>NGƯỜI LẬP BIỂU</strong><br>
+          <span style="font-size: 10pt; font-style: italic;">(Ký, ghi rõ họ tên)</span>
+          <div class="sig-space"></div>
+          <strong>${state.currentUser ? state.currentUser.full_name : 'Quản Trị Viên'}</strong>
+        </div>
+        <div class="sig-block">
+          <strong>KẾ TOÁN TRƯỞNG</strong><br>
+          <span style="font-size: 10pt; font-style: italic;">(Ký, ghi rõ họ tên)</span>
+          <div class="sig-space"></div>
+          <strong>Nguyễn Văn Thu</strong>
+        </div>
+        <div class="sig-block">
+          <strong>GIÁM ĐỐC PHÒNG KHÁM</strong><br>
+          <span style="font-size: 10pt; font-style: italic;">(Ký tên và đóng dấu)</span>
+          <div class="sig-space"></div>
+          <strong>TS. BS. Giám Đốc Điều Hành</strong>
+        </div>
+      </div>
+    </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+function printCashierShiftHandover() {
+  const invoices = state.invoices || [];
+  const fmt = (n) => new Intl.NumberFormat('vi-VN').format(n || 0) + ' đ';
+  const now = new Date();
+  const printDateStr = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`;
+  const printTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  let totalPaid = 0;
+  let totalCash = 0;
+  let totalTransfer = 0;
+  let totalUnpaid = 0;
+  let countPaid = 0;
+  let countUnpaid = 0;
+
+  const rows = invoices.map((inv, idx) => {
+    const amt = parseFloat(inv.total_amount) || 0;
+    if (inv.payment_status === 'PAID') {
+      totalPaid += amt;
+      countPaid++;
+      if (inv.payment_method === 'CASH') totalCash += amt;
+      else totalTransfer += amt;
+    } else {
+      totalUnpaid += amt;
+      countUnpaid++;
+    }
+
+    return `
+      <tr>
+        <td style="text-align: center;">${idx + 1}</td>
+        <td><strong>#HD-${String(inv.id).padStart(4, '0')}</strong></td>
+        <td>${inv.patient_name}</td>
+        <td>${inv.doctor_name || 'BS Phụ trách'}</td>
+        <td style="text-align: right; font-weight: bold;">${fmt(amt)}</td>
+        <td style="text-align: center;">${inv.payment_method === 'TRANSFER' ? 'Chuyển khoản' : 'Tiền mặt'}</td>
+        <td style="text-align: center; font-weight: bold; color: ${inv.payment_status === 'PAID' ? '#047857' : '#dc2626'};">
+          ${inv.payment_status === 'PAID' ? 'ĐÃ THU' : 'CHƯA THU'}
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  const win = window.open('', '_blank', 'width=800,height=800');
+  if (!win) return;
+  win.document.write(`
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+      <meta charset="utf-8">
+      <title>Biên Bản Chốt Ca Thu Ngân - ${printDateStr}</title>
+      <style>
+        body { font-family: 'Times New Roman', serif; font-size: 13pt; line-height: 1.4; color: #000; padding: 15px; }
+        .center { text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 11pt; }
+        th, td { border: 1px solid #333; padding: 6px 8px; }
+        th { background: #f0f0f0; }
+        .signatures { display: flex; justify-content: space-between; margin-top: 40px; text-align: center; }
+        .sig-block { width: 45%; }
+        .sig-space { height: 70px; }
+        @media print { .no-print { display: none; } }
+      </style>
+    </head>
+    <body>
+      <div class="no-print" style="margin-bottom: 15px; text-align: right;">
+        <button onclick="window.print()" style="padding: 8px 16px; font-weight: bold; background: #0d9488; color: #fff; border: none; border-radius: 4px; cursor: pointer;">🖨️ In Bảng Kê Chốt Ca</button>
+      </div>
+      <div class="center">
+        <strong>PHÒNG KHÁM ĐA KHOA QUỐC TẾ DTC</strong><br>
+        <span style="font-size: 11pt;">Quầy Thu Ngân & Viện Phí</span>
+        <h2 style="margin: 15px 0 5px 0; font-size: 15pt;">BIÊN BẢN BÀN GIAO CA & ĐỐI SOÁT QUỸ THU NGÂN</h2>
+        <p style="margin: 0; font-style: italic; font-size: 11pt;">Ngày ${printDateStr} - Thời điểm in: ${printTimeStr}</p>
+      </div>
+
+      <div style="margin: 15px 0; padding: 10px; background: #f8fafc; border: 1px solid #ccc; font-size: 12pt;">
+        <div><strong>Nhân viên thu ngân trực ca:</strong> ${state.currentUser ? state.currentUser.full_name : 'Nguyễn Văn Thu (thungan01)'}</div>
+        <div><strong>Tổng tiền thực thu trong ca:</strong> <span style="font-size: 13pt; font-weight: bold; color: #047857;">${fmt(totalPaid)}</span> (Đã thu ${countPaid} hóa đơn)</div>
+        <div style="margin-left: 15px; font-size: 11pt;">
+          - Tiền mặt tại két: <strong>${fmt(totalCash)}</strong><br>
+          - Chuyển khoản QR / Ngân hàng: <strong>${fmt(totalTransfer)}</strong>
+        </div>
+        <div><strong>Hóa đơn chưa thu tiền:</strong> ${fmt(totalUnpaid)} (${countUnpaid} hóa đơn)</div>
+      </div>
+
+      <h4 style="margin: 10px 0 5px 0;">BẢNG KÊ CHI TIẾT TỪNG HÓA ĐƠN TRONG CA:</h4>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 40px;">STT</th>
+            <th>Mã HĐ</th>
+            <th>Tên Bệnh Nhân</th>
+            <th>Bác Sĩ</th>
+            <th style="text-align: right;">Tổng Tiền</th>
+            <th>Hình Thức</th>
+            <th>Trạng Thái</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+
+      <div class="signatures">
+        <div class="sig-block">
+          <strong>THU NGÂN GIAO CA</strong><br>
+          <span style="font-size: 10pt; font-style: italic;">(Ký, ghi rõ họ tên và số tiền bàn giao)</span>
+          <div class="sig-space"></div>
+          <strong>${state.currentUser ? state.currentUser.full_name : 'Nguyễn Văn Thu'}</strong>
+        </div>
+        <div class="sig-block">
+          <strong>KẾ TOÁN / THU NGÂN NHẬN CA</strong><br>
+          <span style="font-size: 10pt; font-style: italic;">(Ký, ghi rõ họ tên và xác nhận khớp quỹ)</span>
+          <div class="sig-space"></div>
+          <strong>....................................................</strong>
+        </div>
+      </div>
+    </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+function exportRevenueCSV() {
+  if (!currentReportData) {
+    showToast('Chưa có dữ liệu để xuất file!', 'error');
+    return;
+  }
+  const data = currentReportData;
+  let csv = "\uFEFF"; // UTF-8 BOM
+  csv += "BÁO CÁO THỐNG KÊ DOANH THU PHÒNG KHÁM\n";
+  csv += `Kỳ báo cáo: ${data.selected_date}\n`;
+  csv += `Ngày xuất biểu: ${new Date().toLocaleString('vi-VN')}\n\n`;
+
+  csv += "I. TỔNG HỢP CƠ CẤU DOANH THU\n";
+  csv += "Hạng mục,Số lượng / Lượt,Doanh thu (VNĐ)\n";
+  csv += `Tiền khám chuyên khoa,${data.summary.paid_count} lượt,${data.summary.exam_fee_total}\n`;
+  csv += `Dịch vụ Cận lâm sàng & CLS,Theo chỉ định,${data.summary.cls_fee_total}\n`;
+  csv += `Thuốc & Dược phẩm,Theo đơn,${data.summary.medicine_fee_total}\n`;
+  csv += `TỔNG CỘNG THỰC THU,,${data.summary.total_revenue}\n\n`;
+
+  csv += "II. DOANH THU THEO BÁC SĨ & CHUYÊN KHOA\n";
+  csv += "STT,Bác sĩ,Khoa phòng,Số ca khám,Doanh thu (VNĐ),Tỷ trọng (%)\n";
+  (data.by_doctor || []).forEach((d, idx) => {
+    csv += `${idx + 1},"${d.doctor_name}","${d.department_name}",${d.completed_count},${d.doctor_revenue},${d.percentage}%\n`;
+  });
+  csv += "\n";
+
+  csv += "III. PHƯƠNG THỨC THANH TOÁN\n";
+  csv += "Hình thức,Doanh thu (VNĐ)\n";
+  csv += `Tiền mặt tại két,${data.summary.cash_revenue}\n`;
+  csv += `Chuyển khoản VietQR / POS,${data.summary.transfer_revenue}\n`;
+  csv += `Công nợ chưa thanh toán,${data.summary.unpaid_revenue}\n`;
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `BaoCao_DoanhThu_PhongKham_${data.selected_date}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast('Đã xuất file Excel (CSV) thành công!', 'success');
 }

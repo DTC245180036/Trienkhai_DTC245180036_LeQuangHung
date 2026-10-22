@@ -182,10 +182,7 @@
         <div class="stat-icon blue">👥</div>
         <div class="stat-details">
           <h3 id="stat-patients">--</h3>
-          <p>Tổng Hồ sơ Bệnh nhân</p>
-          <div class="stat-sub-info">
-            <span class="badge-mini badge-mini-blue">Đồng bộ CSDL 100%</span>
-          </div>
+          <p>Tổng Hồ Sơ Bệnh Nhân</p>
         </div>
       </div>
       <div class="stat-card">
@@ -193,19 +190,13 @@
         <div class="stat-details">
           <h3 id="stat-waiting">--</h3>
           <p id="stat-waiting-label">Đang Chờ Khám Hôm Nay</p>
-          <div class="stat-sub-info">
-            <span class="badge-mini badge-mini-amber">Cấp số tự động (Redis)</span>
-          </div>
         </div>
       </div>
       <div class="stat-card">
         <div class="stat-icon purple">🩺</div>
         <div class="stat-details">
           <h3 id="stat-completed">--</h3>
-          <p id="stat-completed-label">Lượt Đã Khám Xong</p>
-          <div class="stat-sub-info">
-            <span class="badge-mini badge-mini-purple">Lưu trữ EMR & CLS</span>
-          </div>
+          <p id="stat-completed-label">Lượt Đã Khám Hôm Nay</p>
         </div>
       </div>
       <div class="stat-card" id="card-stat-revenue">
@@ -213,9 +204,7 @@
         <div class="stat-details">
           <h3 id="stat-revenue">-- đ</h3>
           <p id="stat-revenue-label">Doanh Thu Hôm Nay</p>
-          <div class="stat-sub-info">
-            <span class="badge-mini badge-mini-green" id="stat-revenue-total">Tích lũy: -- đ</span>
-          </div>
+          <div style="font-size: 0.78rem; color: #15803d; font-weight: 700; margin-top: 3px;" id="stat-revenue-total">Tích lũy: -- đ</div>
         </div>
       </div>
     </section>
@@ -405,11 +394,34 @@
     <!-- ======================================================== -->
     <div id="tab-cashier" class="tab-pane" style="display: none;">
       <div class="card">
-        <div class="card-header">
+        <div class="card-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
           <div class="card-title">
             <span>💳 Quản Lý Thu Viện Phí & Xuất Hóa Đơn Khám</span>
           </div>
-          <button class="btn btn-secondary btn-sm" id="btn-refresh-invoices">🔄 Làm mới</button>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn btn-secondary btn-sm" id="btn-cashier-print-shift">🖨️ In Bảng Kê Chốt Ca</button>
+            <button class="btn btn-secondary btn-sm" id="btn-refresh-invoices">🔄 Làm mới</button>
+          </div>
+        </div>
+
+        <!-- BẢNG KÊ CHỐT QUỸ CA THU NGÂN TRONG NGÀY -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 18px;">
+          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 12px 16px;">
+            <div style="font-size: 0.76rem; font-weight: 700; color: #166534; text-transform: uppercase;">Tổng Thu Ca Trực</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #15803d;" id="cashier-shift-total">0 đ</div>
+          </div>
+          <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 12px; padding: 12px 16px;">
+            <div style="font-size: 0.76rem; font-weight: 700; color: #0369a1; text-transform: uppercase;">Tiền Mặt Tại Két</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #0284c7;" id="cashier-shift-cash">0 đ</div>
+          </div>
+          <div style="background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 12px 16px;">
+            <div style="font-size: 0.76rem; font-weight: 700; color: #6b21a8; text-transform: uppercase;">Chuyển Khoản QR</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #7c3aed;" id="cashier-shift-transfer">0 đ</div>
+          </div>
+          <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 12px 16px;">
+            <div style="font-size: 0.76rem; font-weight: 700; color: #92400e; text-transform: uppercase;">Chờ Thu (Chưa thanh toán)</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #d97706;" id="cashier-shift-unpaid">0 đ</div>
+          </div>
         </div>
 
         <div class="table-container">
@@ -439,6 +451,138 @@
     <!-- ĐÂY LÀ PHẦN TRỌNG TÂM CỦA MÔN THI VẤN ĐÁP                -->
     <!-- ======================================================== -->
     <div id="tab-admin" class="tab-pane" style="display: none;">
+      
+      <!-- ======================================================== -->
+      <!-- BÁO CÁO THỐNG KÊ DOANH THU & HIỆU SUẤT TÀI CHÍNH         -->
+      <!-- PHỤC VỤ QUẢN TRỊ VIÊN / BAN GIÁM ĐỐC PHÒNG KHÁM          -->
+      <!-- ======================================================== -->
+      <div class="card" id="card-revenue-report">
+        <div class="card-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
+          <div class="card-title">
+            <span>📊 Báo Cáo Thống Kê Doanh Thu & Hiệu Suất Khám Chữa Bệnh</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <div style="display: inline-flex; align-items: center; gap: 6px; background: #f8fafc; padding: 4px 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+              <span style="font-size: 0.8rem; font-weight: 700; color: #475569;">📅 Kỳ báo cáo:</span>
+              <select id="report-date-filter" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 8px; font-size: 0.8rem; font-weight: 600; background: #ffffff; color: var(--text-main); outline: none; cursor: pointer;">
+                <option value="today">Hôm nay</option>
+                <option value="all">Toàn bộ tích lũy</option>
+                <option value="custom">Chọn ngày khác...</option>
+              </select>
+              <input type="date" id="report-custom-date" style="display: none; border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 6px; font-size: 0.8rem;">
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-refresh-report">🔄 Làm mới</button>
+            <button class="btn btn-secondary btn-sm" id="btn-export-csv">📥 Xuất Excel (CSV)</button>
+            <button class="btn btn-primary btn-sm" id="btn-print-report" style="background: linear-gradient(135deg, #0d9488 0%, #0284c7 100%); color: #fff;">🖨️ In Báo Cáo A4</button>
+          </div>
+        </div>
+
+        <!-- 4 Thẻ chỉ số tài chính phòng khám -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 20px;">
+          <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #bbf7d0; border-radius: 14px; padding: 16px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.8rem; font-weight: 700; color: #166534; text-transform: uppercase;">Tổng Thực Thu (PAID)</span>
+              <span style="font-size: 1.2rem;">💵</span>
+            </div>
+            <div style="font-size: 1.6rem; font-weight: 800; color: #15803d; margin: 6px 0 2px 0;" id="rep-total-revenue">0 đ</div>
+            <div style="font-size: 0.78rem; color: #166534;" id="rep-paid-count">Đã thu: 0 hóa đơn</div>
+          </div>
+
+          <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #bae6fd; border-radius: 14px; padding: 16px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.8rem; font-weight: 700; color: #0369a1; text-transform: uppercase;">Tiền Khám Chuyên Khoa</span>
+              <span style="font-size: 1.2rem;">🩺</span>
+            </div>
+            <div style="font-size: 1.6rem; font-weight: 800; color: #0284c7; margin: 6px 0 2px 0;" id="rep-exam-fee">0 đ</div>
+            <div style="font-size: 0.78rem; color: #0369a1;">Định mức: 50.000 đ/lượt</div>
+          </div>
+
+          <div style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border: 1px solid #e9d5ff; border-radius: 14px; padding: 16px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.8rem; font-weight: 700; color: #6b21a8; text-transform: uppercase;">Dịch Vụ Cận Lâm Sàng</span>
+              <span style="font-size: 1.2rem;">🔬</span>
+            </div>
+            <div style="font-size: 1.6rem; font-weight: 800; color: #7c3aed; margin: 6px 0 2px 0;" id="rep-cls-fee">0 đ</div>
+            <div style="font-size: 0.78rem; color: #6b21a8;">X-Quang, Siêu âm, Xét nghiệm</div>
+          </div>
+
+          <div style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border: 1px solid #fde68a; border-radius: 14px; padding: 16px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.8rem; font-weight: 700; color: #92400e; text-transform: uppercase;">Thuốc & Dược Phẩm</span>
+              <span style="font-size: 1.2rem;">💊</span>
+            </div>
+            <div style="font-size: 1.6rem; font-weight: 800; color: #d97706; margin: 6px 0 2px 0;" id="rep-med-fee">0 đ</div>
+            <div style="font-size: 0.78rem; color: #92400e;">Theo đơn thuốc bác sĩ kê</div>
+          </div>
+        </div>
+
+        <!-- 2 Bảng phân tích chi tiết -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 18px; margin-bottom: 8px;">
+          <!-- Bảng 1: Hiệu suất & Doanh thu theo Bác sĩ -->
+          <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px;">
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--dark); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+              <span>👨‍⚕️ Doanh Thu & Lượt Khám Theo Bác Sĩ</span>
+              <span class="badge badge-in_progress" style="font-size: 0.72rem;">4 CHUYÊN KHOA</span>
+            </div>
+            <div class="table-container">
+              <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                <thead>
+                  <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                    <th style="padding: 8px 10px; text-align: left;">Bác Sĩ / Khoa</th>
+                    <th style="padding: 8px 10px; text-align: center;">Số Ca Khám</th>
+                    <th style="padding: 8px 10px; text-align: right;">Doanh Thu</th>
+                    <th style="padding: 8px 10px; text-align: right;">Tỷ Trọng</th>
+                  </tr>
+                </thead>
+                <tbody id="rep-doctor-tbody">
+                  <!-- Render động -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Bảng 2: Cơ cấu phương thức thanh toán & phân bổ -->
+          <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px;">
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--dark); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+              <span>💳 Hình Thức Thanh Toán & Đối Soát Quỹ</span>
+              <span class="badge badge-completed" style="font-size: 0.72rem;">ĐỐI SOÁT TỰ ĐỘNG</span>
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 10px;">
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px;">
+                  <span>💵 Tiền mặt thu tại quầy:</span>
+                  <span id="rep-cash-amount" style="color: #0284c7; font-weight: 700;">0 đ</span>
+                </div>
+                <div style="background: #e2e8f0; border-radius: 999px; height: 10px; overflow: hidden;">
+                  <div id="rep-cash-bar" style="background: #0284c7; height: 100%; width: 0%; transition: width 0.4s ease;"></div>
+                </div>
+              </div>
+
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px;">
+                  <span>📲 Chuyển khoản VietQR / POS:</span>
+                  <span id="rep-transfer-amount" style="color: #8b5cf6; font-weight: 700;">0 đ</span>
+                </div>
+                <div style="background: #e2e8f0; border-radius: 999px; height: 10px; overflow: hidden;">
+                  <div id="rep-transfer-bar" style="background: #8b5cf6; height: 100%; width: 0%; transition: width 0.4s ease;"></div>
+                </div>
+              </div>
+
+              <div style="padding: 12px; background: #f8fafc; border-radius: 10px; border: 1px dashed #cbd5e1; margin-top: 4px; font-size: 0.8rem; color: #475569;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                  <span>Tổng số hóa đơn phát hành:</span>
+                  <strong id="rep-total-invoices-count">0</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span>Công nợ chưa thanh toán:</span>
+                  <strong id="rep-unpaid-amount" style="color: #ef4444;">0 đ (0 hóa đơn)</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       
       <!-- Sơ đồ kiến trúc Multi-tier -->
       <div class="card">

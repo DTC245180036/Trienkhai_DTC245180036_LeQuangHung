@@ -283,6 +283,124 @@ app.get('/stats', async (req, res) => {
 });
 
 // ==========================================
+// 6.1 BÁO CÁO THỐNG KÊ DOANH THU CHUẨN PHÒNG KHÁM / BỆNH VIỆN
+// ==========================================
+app.get('/stats/revenue-report', async (req, res) => {
+  const { date = 'today' } = req.query;
+  try {
+    let whereInvoice = "";
+    let whereAppointment = "";
+    const params = [];
+
+    if (date === 'all') {
+      whereInvoice = "";
+      whereAppointment = "";
+    } else if (date && date !== 'today') {
+      params.push(date);
+      whereInvoice = " AND (a.appointment_date = $1 OR DATE(i.created_at) = $1)";
+      whereAppointment = " AND a.appointment_date = $1";
+    } else {
+      // 'today'
+      whereInvoice = " AND (a.appointment_date = CURRENT_DATE OR DATE(i.created_at) = CURRENT_DATE)";
+      whereAppointment = " AND (a.appointment_date = CURRENT_DATE OR a.id IN (SELECT appointment_id FROM medical_records WHERE DATE(created_at) = CURRENT_DATE) OR a.id IN (SELECT appointment_id FROM invoices WHERE DATE(created_at) = CURRENT_DATE))";
+    }
+
+    // 1. Tổng hợp doanh thu chung (Đã thu, Chưa thu, Tiền mặt, Chuyển khoản)
+    const summaryQuery = `
+      SELECT 
+        COALESCE(SUM(CASE WHEN i.payment_status = 'PAID' THEN i.total_amount ELSE 0 END), 0) as total_revenue,
+        COUNT(CASE WHEN i.payment_status = 'PAID' THEN 1 END) as paid_count,
+        COALESCE(SUM(CASE WHEN i.payment_status = 'UNPAID' THEN i.total_amount ELSE 0 END), 0) as unpaid_revenue,
+        COUNT(CASE WHEN i.payment_status = 'UNPAID' THEN 1 END) as unpaid_count,
+        COALESCE(SUM(CASE WHEN i.payment_status = 'PAID' AND i.payment_method = 'CASH' THEN i.total_amount ELSE 0 END), 0) as cash_revenue,
+        COALESCE(SUM(CASE WHEN i.payment_status = 'PAID' AND i.payment_method != 'CASH' THEN i.total_amount ELSE 0 END), 0) as transfer_revenue
+      FROM invoices i
+      JOIN appointments a ON i.appointment_id = a.id
+      WHERE 1=1 ${whereInvoice}
+    `;
+    const summaryRes = await pool.query(summaryQuery, params);
+    const summary = summaryRes.rows[0];
+
+    // 2. Chi tiết theo cấu phần nguồn thu: Tiền khám (50,000 * số ca), Tiền CLS, Tiền thuốc
+    const clsQuery = `
+      SELECT COALESCE(SUM(ms.price), 0) as cls_total
+      FROM service_requests sr
+      JOIN medical_services ms ON sr.service_id = ms.id
+      JOIN medical_records mr ON sr.record_id = mr.id
+      JOIN invoices i ON i.appointment_id = mr.appointment_id
+      JOIN appointments a ON i.appointment_id = a.id
+      WHERE i.payment_status = 'PAID' ${whereInvoice}
+    `;
+    const clsRes = await pool.query(clsQuery, params);
+    const clsTotal = parseFloat(clsRes.rows[0].cls_total);
+
+    const medQuery = `
+      SELECT COALESCE(SUM(m.unit_price * p.quantity), 0) as medicine_total
+      FROM prescriptions p
+      JOIN medicines m ON p.medicine_id = m.id
+      JOIN medical_records mr ON p.record_id = mr.id
+      JOIN invoices i ON i.appointment_id = mr.appointment_id
+      JOIN appointments a ON i.appointment_id = a.id
+      WHERE i.payment_status = 'PAID' ${whereInvoice}
+    `;
+    const medRes = await pool.query(medQuery, params);
+    const medicineTotal = parseFloat(medRes.rows[0].medicine_total);
+
+    const paidCount = parseInt(summary.paid_count, 10);
+    const examFeeTotal = paidCount * 50000;
+
+    // 3. Doanh thu & lượt khám theo 4 Bác sĩ / Chuyên khoa
+    const doctorQuery = `
+      SELECT 
+        d.id as doctor_id,
+        u.full_name as doctor_name,
+        dep.name as department_name,
+        COUNT(DISTINCT CASE WHEN a.status = 'COMPLETED' THEN a.id END) as completed_count,
+        COALESCE(SUM(CASE WHEN i.payment_status = 'PAID' THEN i.total_amount ELSE 0 END), 0) as doctor_revenue
+      FROM doctors d
+      JOIN users u ON d.user_id = u.id
+      JOIN departments dep ON d.department_id = dep.id
+      LEFT JOIN appointments a ON a.doctor_id = d.id ${whereAppointment}
+      LEFT JOIN invoices i ON i.appointment_id = a.id ${whereInvoice}
+      GROUP BY d.id, u.full_name, dep.name
+      ORDER BY doctor_revenue DESC, completed_count DESC
+    `;
+    const doctorRes = await pool.query(doctorQuery, params);
+
+    const totalRev = parseFloat(summary.total_revenue) || 0;
+    const byDoctor = doctorRes.rows.map(row => {
+      const docRev = parseFloat(row.doctor_revenue);
+      return {
+        doctor_id: row.doctor_id,
+        doctor_name: row.doctor_name,
+        department_name: row.department_name,
+        completed_count: parseInt(row.completed_count, 10),
+        doctor_revenue: docRev,
+        percentage: totalRev > 0 ? Math.round((docRev / totalRev) * 100) : 0
+      };
+    });
+
+    res.json({
+      selected_date: date,
+      summary: {
+        total_revenue: totalRev,
+        paid_count: paidCount,
+        unpaid_revenue: parseFloat(summary.unpaid_revenue),
+        unpaid_count: parseInt(summary.unpaid_count, 10),
+        cash_revenue: parseFloat(summary.cash_revenue),
+        transfer_revenue: parseFloat(summary.transfer_revenue),
+        exam_fee_total: examFeeTotal,
+        cls_fee_total: clsTotal,
+        medicine_fee_total: medicineTotal
+      },
+      by_doctor: byDoctor
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Lỗi tải báo cáo doanh thu: ' + err.message });
+  }
+});
+
+// ==========================================
 // 7. DEPARTMENTS & DOCTORS
 // ==========================================
 app.get('/departments', async (req, res) => {
