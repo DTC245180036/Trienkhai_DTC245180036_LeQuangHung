@@ -128,6 +128,18 @@ function applyRolePermissions(role) {
     }
   });
 
+  // Tùy biến nhãn Tab Khám bệnh: Đối với Quản trị viên đổi thành "Giám Sát Phòng Khám"
+  const docTabBtn = document.getElementById('nav-doctor');
+  if (docTabBtn) {
+    if (role === 'ADMIN') {
+      docTabBtn.innerHTML = '👁️ Giám Sát Phòng Khám';
+      docTabBtn.title = 'Chế độ giám sát hàng đợi và tiến độ khám bệnh dành cho Quản trị viên';
+    } else {
+      docTabBtn.innerHTML = '🩺 Phòng Khám Bác Sĩ';
+      docTabBtn.title = 'Phân hệ chuyên môn khám bệnh & kê đơn dành cho Bác sĩ';
+    }
+  }
+
   // 2. Phân quyền hiển thị Thống kê Tài chính (Doanh thu)
   // Bác sĩ và Tiếp tân chỉ phụ trách chuyên môn y tế, hoàn toàn KHÔNG xem doanh thu tiền nong!
   // Chỉ Quản trị viên (ADMIN) và Thu ngân (CASHIER) mới được xem Doanh thu.
@@ -956,26 +968,56 @@ async function loadDoctorQueue() {
     if (badgeCountEl) badgeCountEl.innerText = `${waitingOrActive.length} ca`;
 
     // Cập nhật nút tắt Mời ca tiếp theo (Call Next Patient)
-    const nextWaiting = waitingList[0];
-    if (nextWaiting) {
+    const activePatient = inProgressList[0]; // Ca đang khám trong phòng
+    const nextWaiting = waitingList[0];      // Ca kế tiếp đang chờ
+
+    if (state.currentRole === 'ADMIN') {
+      // QUẢN TRỊ VIÊN: Chỉ giám sát, không có quyền gọi bệnh nhân
+      if (btnCallNext) btnCallNext.style.display = 'none';
+      if (emptyActionContainer) {
+        emptyActionContainer.innerHTML = `<span style="color: var(--primary); font-weight: 700; font-size: 0.88rem;">👁️ Bạn đang ở Chế độ Giám sát hàng đợi (Dành cho Quản trị viên)</span>`;
+      }
+    } else if (activePatient) {
+      // Đang có 1 bệnh nhân trong phòng (IN_PROGRESS) -> Khóa gọi ca mới, bắt buộc xử lý ca hiện tại
       if (btnCallNext) {
         btnCallNext.style.display = 'block';
-        btnCallNext.innerHTML = `📢 Mời Ca Tiếp: <strong>#${String(nextWaiting.queue_number).padStart(2, '0')} - ${nextWaiting.patient_name}</strong>`;
-        btnCallNext.onclick = () => selectDoctorPatient(nextWaiting.id);
+        btnCallNext.style.background = '#fef3c7';
+        btnCallNext.style.color = '#92400e';
+        btnCallNext.style.borderColor = '#fcd34d';
+        btnCallNext.innerHTML = `🩺 Đang Khám: <strong>#${String(activePatient.queue_number).padStart(2, '0')} - ${activePatient.patient_name}</strong>`;
+        btnCallNext.onclick = () => {
+          showToast(`⚠️ Bác sĩ đang khám cho bệnh nhân ${activePatient.patient_name} (STT #${activePatient.queue_number}). Vui lòng hoàn tất khám & lưu bệnh án trước khi gọi ca tiếp theo!`, 'warning');
+          selectDoctorPatient(activePatient.id, false);
+        };
       }
       if (emptyActionContainer) {
         emptyActionContainer.innerHTML = `
-          <button type="button" class="btn btn-primary" onclick="selectDoctorPatient(${nextWaiting.id})" style="font-weight: 700; padding: 11px 22px; font-size: 0.92rem; box-shadow: 0 4px 14px rgba(13, 148, 136, 0.28);">
-            🩺 Mời Khám Ngay: #${String(nextWaiting.queue_number).padStart(2, '0')} - ${nextWaiting.patient_name}
+          <button type="button" class="btn btn-warning" onclick="selectDoctorPatient(${activePatient.id}, false)" style="font-weight: 700; padding: 11px 22px; font-size: 0.92rem; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;">
+            🩺 Tiếp Tục Khám Ca Đang Dở: #${String(activePatient.queue_number).padStart(2, '0')} - ${activePatient.patient_name}
+          </button>
+        `;
+      }
+    } else if (nextWaiting) {
+      // Phòng khám trống & có ca chờ -> Cho phép mời ca tiếp theo
+      if (btnCallNext) {
+        btnCallNext.style.display = 'block';
+        btnCallNext.style.background = '';
+        btnCallNext.style.color = '';
+        btnCallNext.style.borderColor = '';
+        btnCallNext.innerHTML = `📢 Mời Ca Tiếp: <strong>#${String(nextWaiting.queue_number).padStart(2, '0')} - ${nextWaiting.patient_name}</strong>`;
+        btnCallNext.onclick = () => callNextPatientIntoRoom(nextWaiting.id);
+      }
+      if (emptyActionContainer) {
+        emptyActionContainer.innerHTML = `
+          <button type="button" class="btn btn-primary" onclick="callNextPatientIntoRoom(${nextWaiting.id})" style="font-weight: 700; padding: 11px 22px; font-size: 0.92rem; box-shadow: 0 4px 14px rgba(13, 148, 136, 0.28);">
+            📢 Mời Vào Phòng & Bắt Đầu Khám: #${String(nextWaiting.queue_number).padStart(2, '0')} - ${nextWaiting.patient_name}
           </button>
         `;
       }
     } else {
       if (btnCallNext) btnCallNext.style.display = 'none';
       if (emptyActionContainer) {
-        emptyActionContainer.innerHTML = inProgressList.length > 0
-          ? `<span style="color: #059669; font-weight: 700; font-size: 0.9rem;">🩺 Hiện có 1 bệnh nhân đang trong phòng khám</span>`
-          : `<span style="color: var(--text-muted); font-size: 0.88rem;">🎉 Hiện tại phòng khám không còn bệnh nhân nào đang chờ</span>`;
+        emptyActionContainer.innerHTML = `<span style="color: var(--text-muted); font-size: 0.88rem;">🎉 Hiện tại phòng khám không còn bệnh nhân nào đang chờ</span>`;
       }
     }
 
@@ -1031,7 +1073,75 @@ async function loadDoctorQueue() {
   }
 }
 
-window.selectDoctorPatient = async (appointmentId) => {
+// Kiểm tra xem form khám bệnh có đang có dữ liệu chưa lưu không
+function isDoctorFormDirty() {
+  const form = document.getElementById('form-medical-record');
+  if (!form || form.style.display === 'none' || !state.selectedAppointment) return false;
+  if (state.selectedAppointment.status === 'COMPLETED') return false;
+
+  const diagnosis = (document.getElementById('exam-diagnosis')?.value || '').trim();
+  const advice = (document.getElementById('exam-advice')?.value || '').trim();
+  const checkedServices = document.querySelectorAll('input[name="services"]:checked').length;
+  const prescriptions = document.querySelectorAll('.prescription-row').length;
+
+  return (diagnosis.length > 0 || advice.length > 0 || checkedServices > 0 || prescriptions > 0);
+}
+
+// Hàm mời bệnh nhân tiếp theo chính thức vào phòng khám
+window.callNextPatientIntoRoom = async (appointmentId) => {
+  if (state.currentRole === 'ADMIN') {
+    showToast('Tài khoản Quản trị viên chỉ có quyền giám sát, không thể gọi bệnh nhân vào khám!', 'warning');
+    return;
+  }
+
+  // 1. Kiểm tra xem phòng khám này có đang có ca IN_PROGRESS nào chưa hoàn tất không
+  const isDoctor = state.currentUser?.role === 'DOCTOR' && state.currentUser?.doctor;
+  const currentDoctorId = isDoctor ? state.currentUser.doctor.doctor_id : null;
+  const activeOther = (state.appointments || []).find(a => 
+    a.status === 'IN_PROGRESS' && 
+    (!currentDoctorId || String(a.doctor_id) === String(currentDoctorId))
+  );
+
+  if (activeOther) {
+    showToast(`⚠️ Bác sĩ đang khám cho bệnh nhân "${activeOther.patient_name}" (STT #${activeOther.queue_number})! Vui lòng hoàn tất ca khám hiện tại trước khi gọi ca tiếp theo.`, 'warning');
+    await selectDoctorPatient(activeOther.id, false);
+    return;
+  }
+
+  // 2. Kiểm tra nếu có dữ liệu đang nhập dở
+  if (isDoctorFormDirty()) {
+    const confirmDiscard = confirm(`⚠️ Bác sĩ đang nhập dở dữ liệu bệnh án mà chưa lưu! Bạn có chắc chắn muốn bỏ qua để mời bệnh nhân mới không?`);
+    if (!confirmDiscard) return;
+  }
+
+  try {
+    // 3. Chuyển trạng thái ca khám sang IN_PROGRESS (Đang khám)
+    const res = await fetch(`${API_BASE}/appointments/${appointmentId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'IN_PROGRESS' })
+    });
+
+    if (!res.ok) {
+      throw new Error('Không thể cập nhật trạng thái ca khám');
+    }
+
+    const updatedApp = await res.json();
+    const target = (state.appointments || []).find(a => a.id == appointmentId);
+    if (target) target.status = 'IN_PROGRESS';
+
+    showToast(`🔔 Đã mời bệnh nhân ${target?.patient_name || updatedApp.patient_name} (STT #${target?.queue_number || updatedApp.queue_number}) vào phòng khám!`, 'success');
+
+    // 4. Mở ngay hồ sơ bệnh án cho bệnh nhân đó
+    await selectDoctorPatient(appointmentId, true);
+    await loadDoctorQueue();
+    await loadStats();
+  } catch (err) {
+    showToast('Lỗi khi gọi bệnh nhân: ' + err.message, 'error');
+  }
+};
+
+window.selectDoctorPatient = async (appointmentId, force = false) => {
   let appointment = state.appointments.find(a => a.id == appointmentId);
   if (!appointment) {
     await loadDoctorQueue();
@@ -1039,12 +1149,47 @@ window.selectDoctorPatient = async (appointmentId) => {
     if (!appointment) return;
   }
 
-  // KIỂM TRA PHÂN QUYỀN KHÁM BỆNH CỦA BÁC SĨ (Chặn việc bác sĩ này khám cho bệnh nhân của bác sĩ khác)
+  // 1. KIỂM TRA PHÂN QUYỀN KHÁM BỆNH CỦA BÁC SĨ (Chặn việc bác sĩ này khám cho bệnh nhân của bác sĩ khác)
   if (state.currentUser?.role === 'DOCTOR' && state.currentUser?.doctor) {
     const currentDoctorId = state.currentUser.doctor.doctor_id;
     if (appointment.doctor_id && String(appointment.doctor_id) !== String(currentDoctorId)) {
       showToast(`⛔ Bạn không có quyền khám ca này! Bệnh nhân ${appointment.patient_name} được phân công cho ${appointment.doctor_name || 'Bác sĩ khác'}.`, 'error');
       return;
+    }
+  }
+
+  // 2. CHẶN NHẢY CÓC KHI ĐANG CÓ CA IN_PROGRESS HOẶC DỮ LIỆU ĐANG NHẬP CHƯA LƯU
+  if (!force && state.selectedAppointment && state.selectedAppointment.id != appointment.id) {
+    const isDoctor = state.currentUser?.role === 'DOCTOR' && state.currentUser?.doctor;
+    const currentDoctorId = isDoctor ? state.currentUser.doctor.doctor_id : null;
+    const activeOther = (state.appointments || []).find(a => 
+      a.status === 'IN_PROGRESS' && 
+      a.id !== appointment.id &&
+      (!currentDoctorId || String(a.doctor_id) === String(currentDoctorId))
+    );
+
+    if (activeOther) {
+      const confirmSwitch = confirm(
+        `⚠️ Bác sĩ hiện đang khám dở cho bệnh nhân "${activeOther.patient_name}" (STT #${activeOther.queue_number}) chưa hoàn tất!\n\nBạn có muốn tạm dừng ca khám này (chuyển về hàng chờ) để chuyển sang bệnh nhân "${appointment.patient_name}" (STT #${appointment.queue_number}) không?`
+      );
+      if (!confirmSwitch) return;
+
+      try {
+        await fetch(`${API_BASE}/appointments/${activeOther.id}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'WAITING' })
+        });
+        activeOther.status = 'WAITING';
+        showToast(`Đã chuyển bệnh nhân ${activeOther.patient_name} về lại hàng chờ!`, 'info');
+      } catch (e) {
+        console.warn('Lỗi hoàn tác trạng thái:', e);
+      }
+    } else if (isDoctorFormDirty()) {
+      const confirmDiscard = confirm(
+        `⚠️ Bạn đang có dữ liệu bệnh án chưa lưu cho bệnh nhân "${state.selectedAppointment.patient_name}". Nếu chuyển ca, các thông tin đang nhập sẽ bị mất.\n\nBạn có chắc chắn muốn bỏ qua không?`
+      );
+      if (!confirmDiscard) return;
     }
   }
 
@@ -1085,7 +1230,7 @@ window.selectDoctorPatient = async (appointmentId) => {
     statusBadge.innerText = 'CHỜ KHÁM';
     statusBadge.className = 'badge badge-waiting';
     if (btnStartExam) {
-      btnStartExam.style.display = 'inline-flex';
+      btnStartExam.style.display = (state.currentRole === 'ADMIN') ? 'none' : 'inline-flex';
       btnStartExam.innerText = '🩺 Mời Vào Phòng & Bắt Đầu Khám';
     }
   } else if (appointment.status === 'IN_PROGRESS') {
@@ -1096,6 +1241,47 @@ window.selectDoctorPatient = async (appointmentId) => {
     statusBadge.innerText = 'ĐÃ KHÁM XONG';
     statusBadge.className = 'badge badge-completed';
     if (btnStartExam) btnStartExam.style.display = 'none';
+  }
+
+  // XỬ LÝ PHÂN QUYỀN CHẾ ĐỘ GIÁM SÁT CỦA ADMIN VS CHUYÊN MÔN CỦA BÁC SĨ
+  const isAdmin = state.currentRole === 'ADMIN';
+  let adminBanner = document.getElementById('admin-doctor-monitor-banner');
+  if (isAdmin) {
+    if (!adminBanner) {
+      adminBanner = document.createElement('div');
+      adminBanner.id = 'admin-doctor-monitor-banner';
+      adminBanner.style.cssText = 'background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 12px 16px; border-radius: 8px; margin-bottom: 14px; font-size: 0.86rem; display: flex; align-items: flex-start; gap: 10px; line-height: 1.4;';
+      adminBanner.innerHTML = '<span style="font-size: 1.25rem;">👁️</span> <div><strong style="color: #1e3a8a;">CHẾ ĐỘ GIÁM SÁT DÀNH CHO QUẢN TRỊ VIÊN:</strong><br>Quản trị viên chỉ có quyền theo dõi danh sách hàng chờ và hồ sơ bệnh án. Nghiệp vụ khám bệnh, kê đơn và gọi bệnh nhân chỉ dành riêng cho Bác sĩ có chứng chỉ hành nghề.</div>';
+      form.parentNode.insertBefore(adminBanner, form);
+    }
+    adminBanner.style.display = 'flex';
+
+    // Vô hiệu hóa trường nhập và ẩn các nút tác vụ khám
+    document.getElementById('exam-bp').disabled = true;
+    document.getElementById('exam-temp').disabled = true;
+    document.getElementById('exam-diagnosis').disabled = true;
+    document.getElementById('exam-advice').disabled = true;
+    if (fileInput) fileInput.disabled = true;
+    document.querySelectorAll('input[name="services"]').forEach(cb => cb.disabled = true);
+    const addMedBtn = document.getElementById('btn-add-prescription-row');
+    if (addMedBtn) addMedBtn.style.display = 'none';
+    const submitBtn = document.getElementById('btn-submit-exam');
+    if (submitBtn) submitBtn.style.display = 'none';
+    if (btnStartExam) btnStartExam.style.display = 'none';
+  } else {
+    if (adminBanner) adminBanner.style.display = 'none';
+
+    // Kích hoạt trường nhập cho Bác sĩ
+    document.getElementById('exam-bp').disabled = false;
+    document.getElementById('exam-temp').disabled = false;
+    document.getElementById('exam-diagnosis').disabled = false;
+    document.getElementById('exam-advice').disabled = false;
+    if (fileInput) fileInput.disabled = false;
+    document.querySelectorAll('input[name="services"]').forEach(cb => cb.disabled = false);
+    const addMedBtn = document.getElementById('btn-add-prescription-row');
+    if (addMedBtn) addMedBtn.style.display = 'inline-block';
+    const submitBtn = document.getElementById('btn-submit-exam');
+    if (submitBtn) submitBtn.style.display = 'inline-block';
   }
 
   document.getElementById('exam-bp').value = '120/80';
@@ -1207,6 +1393,10 @@ function setupDoctorExamForm() {
   const btnStartExam = document.getElementById('btn-start-exam');
   if (btnStartExam) {
     btnStartExam.addEventListener('click', async () => {
+      if (state.currentRole === 'ADMIN') {
+        showToast('Tài khoản Quản trị viên chỉ có quyền giám sát, không thể gọi bệnh nhân vào khám!', 'warning');
+        return;
+      }
       if (!state.selectedAppointment) return;
 
       // Cảnh báo nếu bác sĩ đang có bệnh nhân khác đang dở dang 'IN_PROGRESS'
@@ -1324,10 +1514,21 @@ function setupDoctorExamForm() {
       }
     });
 
+    // Kiểm tra phân quyền: Quản trị viên không được phép khám bệnh và lưu hồ sơ
+    if (state.currentRole === 'ADMIN') {
+      showToast('Tài khoản Quản trị viên chỉ có quyền giám sát, không thể lưu bệnh án và kê đơn!', 'error');
+      return;
+    }
+
     // Xác định bác sĩ thực hiện (bác sĩ đang đăng nhập)
     const activeDoctorId = (state.currentUser?.role === 'DOCTOR' && state.currentUser?.doctor)
       ? state.currentUser.doctor.doctor_id
-      : (state.selectedAppointment?.doctor_id || null);
+      : null;
+
+    if (!activeDoctorId) {
+      showToast('Chỉ Bác sĩ phụ trách có chứng chỉ hành nghề mới được phép hoàn tất khám và lưu bệnh án!', 'error');
+      return;
+    }
 
     try {
       const res = await fetch(`${API_BASE}/medical-records`, {

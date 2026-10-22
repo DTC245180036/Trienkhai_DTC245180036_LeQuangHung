@@ -908,7 +908,13 @@ app.post('/medical-records', async (req, res) => {
       return res.status(404).json({ error: 'Không tìm thấy ca khám bệnh' });
     }
     const assignedDoctorId = appRes.rows[0].doctor_id;
-    if (doctor_id && parseInt(doctor_id, 10) !== assignedDoctorId) {
+    if (!doctor_id) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ 
+        error: 'Chỉ Bác sĩ phụ trách có chứng chỉ hành nghề mới được phép khám bệnh và lưu hồ sơ bệnh án! Tài khoản Quản trị viên chỉ có quyền theo dõi giám sát.' 
+      });
+    }
+    if (parseInt(doctor_id, 10) !== assignedDoctorId) {
       const docInfo = await client.query('SELECT u.full_name, d.room_number FROM doctors d JOIN users u ON d.user_id = u.id WHERE d.id = $1', [assignedDoctorId]);
       const targetDoc = docInfo.rows[0] ? `${docInfo.rows[0].full_name} (${docInfo.rows[0].room_number})` : 'Bác sĩ khác';
       await client.query('ROLLBACK');
