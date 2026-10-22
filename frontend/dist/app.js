@@ -1360,6 +1360,7 @@ function setupRevenueReportEvents() {
   const btnRefresh = document.getElementById('btn-refresh-report');
   const btnPrint = document.getElementById('btn-print-report');
   const btnExport = document.getElementById('btn-export-csv');
+  const btnExportWord = document.getElementById('btn-export-word');
   const btnCashierPrintShift = document.getElementById('btn-cashier-print-shift');
 
   if (dateFilter) {
@@ -1397,6 +1398,10 @@ function setupRevenueReportEvents() {
     btnExport.addEventListener('click', exportRevenueCSV);
   }
 
+  if (btnExportWord) {
+    btnExportWord.addEventListener('click', exportRevenueWord);
+  }
+
   if (btnPrint) {
     btnPrint.addEventListener('click', printRevenueReportA4);
   }
@@ -1404,6 +1409,247 @@ function setupRevenueReportEvents() {
   if (btnCashierPrintShift) {
     btnCashierPrintShift.addEventListener('click', printCashierShiftHandover);
   }
+}
+
+function exportRevenueWord() {
+  if (!currentReportData) {
+    showToast('Chưa có dữ liệu báo cáo để xuất Word!', 'error');
+    return;
+  }
+  const data = currentReportData;
+  const fmt = (n) => new Intl.NumberFormat('vi-VN').format(n || 0) + ' đ';
+  const now = new Date();
+  const printDateStr = `${now.getDate()} tháng ${now.getMonth() + 1} năm ${now.getFullYear()}`;
+  const printTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  let periodTitle = "Hôm nay";
+  if (data.selected_date === 'all') periodTitle = "Toàn bộ tích lũy đến hiện tại";
+  else if (data.selected_date && data.selected_date !== 'today') periodTitle = `Ngày ${data.selected_date}`;
+
+  const docRows = (data.by_doctor || []).map((doc, idx) => `
+    <tr>
+      <td style="text-align: center; border: 1px solid #333333; padding: 6px;">${idx + 1}</td>
+      <td style="border: 1px solid #333333; padding: 6px;"><strong>${doc.doctor_name}</strong></td>
+      <td style="border: 1px solid #333333; padding: 6px;">${doc.department_name}</td>
+      <td style="text-align: center; border: 1px solid #333333; padding: 6px;">${doc.completed_count}</td>
+      <td style="text-align: right; border: 1px solid #333333; padding: 6px; font-weight: bold;">${fmt(doc.doctor_revenue)}</td>
+      <td style="text-align: center; border: 1px solid #333333; padding: 6px;">${doc.percentage}%</td>
+    </tr>
+  `).join('');
+
+  const wordContent = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta charset="utf-8">
+      <title>Báo Cáo Thống Kê Doanh Thu</title>
+      <!--[if gte mso 9]>
+      <xml>
+        <w:WordDocument>
+          <w:View>Print</w:View>
+          <w:Zoom>100</w:Zoom>
+          <w:DoNotOptimizeForBrowser/>
+        </w:WordDocument>
+      </xml>
+      <![endif]-->
+      <style>
+        @page Section1 {
+          size: 595.3pt 841.9pt; /* A4: 21cm x 29.7cm */
+          margin: 54.0pt 54.0pt 54.0pt 54.0pt; /* 2.0cm margins */
+          mso-header-margin: 36.0pt;
+          mso-footer-margin: 36.0pt;
+          mso-paper-source: 0;
+        }
+        div.Section1 { page: Section1; }
+        body {
+          font-family: 'Times New Roman', Times, serif;
+          font-size: 13pt;
+          line-height: 1.35;
+          color: #000000;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          font-family: 'Times New Roman', Times, serif;
+        }
+        .header-table td {
+          border: none !important;
+          padding: 2px 4px;
+        }
+        .data-table {
+          margin: 12px 0 20px 0;
+          font-size: 11pt;
+        }
+        .data-table th, .data-table td {
+          border: 1px solid #333333;
+          padding: 6px 8px;
+        }
+        .data-table th {
+          background-color: #f2f2f2;
+          font-weight: bold;
+        }
+        .sig-table td {
+          border: none !important;
+          text-align: center;
+          padding: 10px 4px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="Section1">
+        <!-- HEADER QUỐC HIỆU & ĐƠN VỊ -->
+        <table class="header-table" style="width: 100%; margin-bottom: 20px;">
+          <tr>
+            <td style="width: 48%; vertical-align: top; text-align: left;">
+              <strong>SỞ Y TẾ TP. HÀ NỘI</strong><br>
+              <strong>PHÒNG KHÁM ĐA KHOA QUỐC TẾ DTC</strong><br>
+              <span style="font-size: 10pt;">Địa chỉ: 123 Đường Giải Phóng, Hà Nội<br>Hotline: 1900 6868</span>
+            </td>
+            <td style="width: 52%; vertical-align: top; text-align: center;">
+              <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br>
+              <strong>Độc lập - Tự do - Hạnh phúc</strong><br>
+              <span>------------------------</span>
+            </td>
+          </tr>
+        </table>
+
+        <!-- TIÊU ĐỀ BÁO CÁO -->
+        <div style="text-align: center; margin: 25px 0 15px 0;">
+          <h2 style="font-size: 16pt; font-weight: bold; text-transform: uppercase; margin: 0;">BÁO CÁO THỐNG KÊ DOANH THU & HIỆU SUẤT PHÒNG KHÁM</h2>
+          <p style="margin: 6px 0; font-style: italic; font-size: 11pt;">Kỳ báo cáo: <strong>${periodTitle}</strong> (Thời điểm xuất biểu: ${printTimeStr}, ngày ${printDateStr})</p>
+        </div>
+
+        <!-- MỤC I -->
+        <div style="font-weight: bold; margin-top: 15px; font-size: 12pt; text-transform: uppercase;">I. TỔNG HỢP CƠ CẤU DOANH THU & NGUỒN THU</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 45px; text-align: center;">STT</th>
+              <th>Danh Mục Nguồn Thu</th>
+              <th style="width: 120px; text-align: center;">Số Lượng / Lượt</th>
+              <th style="width: 170px; text-align: right;">Thành Tiền (VNĐ)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="text-align: center;">1</td>
+              <td><strong>Doanh thu tiền khám bệnh chuyên khoa</strong> (Định mức 50.000 đ/lượt)</td>
+              <td style="text-align: center;">${data.summary.paid_count} ca khám</td>
+              <td style="text-align: right; font-weight: bold;">${fmt(data.summary.exam_fee_total)}</td>
+            </tr>
+            <tr>
+              <td style="text-align: center;">2</td>
+              <td><strong>Doanh thu dịch vụ Cận Lâm Sàng</strong> (Chụp X-quang, Siêu âm, Xét nghiệm)</td>
+              <td style="text-align: center;">Theo chỉ định</td>
+              <td style="text-align: right; font-weight: bold;">${fmt(data.summary.cls_fee_total)}</td>
+            </tr>
+            <tr>
+              <td style="text-align: center;">3</td>
+              <td><strong>Doanh thu bán thuốc & dược phẩm</strong> (Theo đơn điều trị)</td>
+              <td style="text-align: center;">Theo đơn thuốc</td>
+              <td style="text-align: right; font-weight: bold;">${fmt(data.summary.medicine_fee_total)}</td>
+            </tr>
+            <tr style="background-color: #f7f7f7; font-weight: bold;">
+              <td colspan="3" style="text-align: right; text-transform: uppercase;">TỔNG CỘNG DOANH THU THỰC THU:</td>
+              <td style="text-align: right; font-size: 12pt; color: #047857;">${fmt(data.summary.total_revenue)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- MỤC II -->
+        <div style="font-weight: bold; margin-top: 15px; font-size: 12pt; text-transform: uppercase;">II. CHI TIẾT THEO BÁC SĨ & KHOA PHÒNG</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 45px; text-align: center;">STT</th>
+              <th>Họ và Tên Bác Sĩ</th>
+              <th>Khoa / Chuyên Khoa Phụ Trách</th>
+              <th style="width: 100px; text-align: center;">Số Ca Khám</th>
+              <th style="width: 160px; text-align: right;">Doanh Thu (VNĐ)</th>
+              <th style="width: 80px; text-align: center;">Tỷ Trọng</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${docRows}
+          </tbody>
+        </table>
+
+        <!-- MỤC III -->
+        <div style="font-weight: bold; margin-top: 15px; font-size: 12pt; text-transform: uppercase;">III. PHƯƠNG THỨC THU & ĐỐI SOÁT QUỸ TIỀN TỆ</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Hình Thức Thu Viện Phí</th>
+              <th style="width: 180px; text-align: right;">Số Tiền Đã Thu (VNĐ)</th>
+              <th style="width: 100px; text-align: center;">Tỷ Lệ</th>
+              <th>Ghi Chú Nghiệp Vụ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. Tiền mặt (Cash)</strong></td>
+              <td style="text-align: right; font-weight: bold;">${fmt(data.summary.cash_revenue)}</td>
+              <td style="text-align: center;">${data.summary.total_revenue > 0 ? Math.round((data.summary.cash_revenue / data.summary.total_revenue) * 100) : 0}%</td>
+              <td>Kiểm đếm quỹ tiền mặt tại két quầy thu ngân</td>
+            </tr>
+            <tr>
+              <td><strong>2. Chuyển khoản ngân hàng (VietQR / POS)</strong></td>
+              <td style="text-align: right; font-weight: bold;">${fmt(data.summary.transfer_revenue)}</td>
+              <td style="text-align: center;">${data.summary.total_revenue > 0 ? Math.round((data.summary.transfer_revenue / data.summary.total_revenue) * 100) : 0}%</td>
+              <td>Tài khoản thanh toán ngân hàng của phòng khám</td>
+            </tr>
+            <tr>
+              <td><strong>3. Hóa đơn chưa thanh toán (Công nợ)</strong></td>
+              <td style="text-align: right; color: red;">${fmt(data.summary.unpaid_revenue)}</td>
+              <td style="text-align: center;">${data.summary.unpaid_count} hóa đơn</td>
+              <td>Bệnh nhân đang chờ làm thủ tục thanh toán</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="text-align: right; font-style: italic; margin-top: 25px;">
+          Hà Nội, ngày ${printDateStr}
+        </div>
+
+        <!-- CHỮ KÝ 3 BÊN -->
+        <table class="sig-table" style="width: 100%; margin-top: 15px;">
+          <tr>
+            <td style="width: 33%; vertical-align: top;">
+              <strong>NGƯỜI LẬP BIỂU</strong><br>
+              <span style="font-style: italic; font-size: 10pt;">(Ký, ghi rõ họ tên)</span>
+              <br><br><br><br><br>
+              <strong>${state.currentUser ? state.currentUser.full_name : 'Quản Trị Viên'}</strong>
+            </td>
+            <td style="width: 34%; vertical-align: top;">
+              <strong>KẾ TOÁN TRƯỞNG</strong><br>
+              <span style="font-style: italic; font-size: 10pt;">(Ký, ghi rõ họ tên)</span>
+              <br><br><br><br><br>
+              <strong>Nguyễn Văn Thu</strong>
+            </td>
+            <td style="width: 33%; vertical-align: top;">
+              <strong>GIÁM ĐỐC PHÒNG KHÁM</strong><br>
+              <span style="font-style: italic; font-size: 10pt;">(Ký tên và đóng dấu)</span>
+              <br><br><br><br><br>
+              <strong>TS. BS. Giám Đốc Điều Hành</strong>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const blob = new Blob(['\ufeff', wordContent], {
+    type: 'application/msword;charset=utf-8'
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `BaoCao_DoanhThu_PhongKham_${data.selected_date}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Đã xuất báo cáo Word (.doc) khổ A4 thành công!', 'success');
 }
 
 function printRevenueReportA4() {
