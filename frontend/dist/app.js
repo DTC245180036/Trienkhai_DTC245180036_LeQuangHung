@@ -645,14 +645,14 @@ function setupModal() {
         const currentName = (nameInput.value || '').trim().toLowerCase();
         const matchedName = (matched.full_name || '').trim().toLowerCase();
 
-        // Trường hợp 1: Trùng SĐT nhưng họ tên nhập khác hoàn toàn bệnh nhân cũ
-        if (phone && matched.phone === phone && currentName && currentName !== matchedName) {
+        // Trường hợp 1: Trùng CCCD hoặc SĐT nhưng họ tên nhập vào lại khác họ tên bệnh nhân cũ
+        if (currentName && currentName !== matchedName) {
           if (statusBanner) {
             statusBanner.style.display = 'block';
             statusBanner.style.background = '#fef2f2';
             statusBanner.style.borderColor = '#fca5a5';
             statusBanner.style.color = '#991b1b';
-            statusBanner.innerHTML = `⚠️ <strong>Cảnh báo trùng số điện thoại:</strong> Số <strong>${phone}</strong> đã được đăng ký cho bệnh nhân <strong>${matched.full_name}</strong> (CCCD: ${matched.identity_card}). Trong thực tế mỗi bệnh nhân cần số điện thoại riêng để nhận đơn thuốc & liên lạc y tế. Vui lòng kiểm tra lại.`;
+            statusBanner.innerHTML = `⚠️ <strong>Cảnh báo xung đột định danh:</strong> Số CCCD <strong>${matched.identity_card}</strong> ${phone ? `(và SĐT <strong>${matched.phone}</strong>)` : ''} đã thuộc về bệnh nhân <strong>${matched.full_name}</strong> trong hệ thống.<br>Bạn đang nhập tên là <strong>"${nameInput.value}"</strong>. Theo quy định y tế, mỗi số CCCD gắn liền với 1 công dân duy nhất, không thể tạo hồ sơ cho người khác bằng số CCCD này!`;
           }
         } else {
           // Trường hợp 2: Tái khám (hoặc chưa nhập tên) -> Tự động điền thông tin cũ

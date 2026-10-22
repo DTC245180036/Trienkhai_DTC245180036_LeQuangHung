@@ -555,8 +555,11 @@ app.post('/patients', async (req, res) => {
 
     if (phoneOwnerCheck.rows.length > 0) {
       const owner = phoneOwnerCheck.rows[0];
-      // Nếu số điện thoại đã tồn tại nhưng nhập họ tên khác hoặc CCCD khác
-      if (owner.identity_card !== cleanIdCard && owner.full_name.trim().toLowerCase() !== full_name.trim().toLowerCase()) {
+      const ownerName = (owner.full_name || '').trim().toLowerCase();
+      const incomingName = normalizedFullName.trim().toLowerCase();
+
+      // Nếu số điện thoại đã tồn tại nhưng nhập họ tên khác
+      if (ownerName && ownerName !== incomingName) {
         await client.query('ROLLBACK');
         return res.status(400).json({
           error: `Số điện thoại ${cleanPhone} đã được đăng ký cho bệnh nhân "${owner.full_name}" (CCCD: ${owner.identity_card}). Trong quản lý y tế, mỗi bệnh nhân phải có hồ sơ và số điện thoại riêng để nhận kết quả khám và liên hệ!`
@@ -574,11 +577,20 @@ app.post('/patients', async (req, res) => {
 
     if (existingPat.rows.length > 0) {
       const pat = existingPat.rows[0];
-      // Cập nhật thông tin nếu có thay đổi
-      if (pat.user_id) {
-        await client.query(`
-          UPDATE users SET full_name = $1, phone = COALESCE(NULLIF($2, ''), phone) WHERE id = $3
-        `, [normalizedFullName, cleanPhone, pat.user_id]);
+      const existingName = (pat.full_name || '').trim().toLowerCase();
+      const incomingName = normalizedFullName.trim().toLowerCase();
+
+      // XUNG ĐỘT ĐỊNH DANH: Nếu số CCCD đã tồn tại trong hệ thống nhưng nhập tên của một người hoàn toàn khác
+      if (existingName && existingName !== incomingName) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: `Xung đột định danh y tế! Số CCCD ${cleanIdCard} đã được đăng ký cho bệnh nhân "${pat.full_name}". Theo quy định y tế, mỗi công dân chỉ có duy nhất 1 số CCCD gắn với họ tên pháp lý của mình. Không thể đăng ký số CCCD này cho bệnh nhân khác là "${normalizedFullName}"! Vui lòng kiểm tra lại CCCD trên giấy tờ tùy thân.`
+        });
+      }
+
+      // HỢP LỆ (TÁI KHÁM): Giữ nguyên họ tên hồ sơ gốc, cập nhật số điện thoại / địa chỉ nếu có thay đổi
+      if (pat.user_id && cleanPhone && cleanPhone !== pat.phone) {
+        await client.query(`UPDATE users SET phone = $1 WHERE id = $2`, [cleanPhone, pat.user_id]);
       }
       await client.query(`
         UPDATE patients 
@@ -590,7 +602,7 @@ app.post('/patients', async (req, res) => {
       `, [dob || null, gender || '', address || '', medical_history || '', pat.id]);
 
       await client.query('COMMIT');
-      return res.status(200).json({ ...pat, full_name: normalizedFullName, phone: cleanPhone || pat.phone });
+      return res.status(200).json({ ...pat, full_name: pat.full_name, phone: cleanPhone || pat.phone });
     }
 
     // 2. Nếu là bệnh nhân mới: tạo user và profile bệnh nhân
