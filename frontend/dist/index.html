@@ -982,12 +982,82 @@
       </div>
     </div>
 
+    <!-- ======================================================== -->
+    <!-- MODAL: THÔNG BÁO TIẾP NHẬN & CẤP SỐ THÀNH CÔNG          -->
+    <!-- ======================================================== -->
+    <div class="modal-overlay" id="modal-reception-success">
+      <div class="modal-box" style="max-width: 500px; text-align: center; padding: 28px 24px;">
+        <div style="display: flex; justify-content: flex-end; margin-top: -10px; margin-right: -10px;">
+          <button class="modal-close" id="btn-close-succ-modal" type="button" title="Đóng">&times;</button>
+        </div>
+
+        <div style="width: 68px; height: 68px; border-radius: 50%; background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 14px auto; box-shadow: 0 8px 20px rgba(16, 185, 129, 0.25);">
+          ✅
+        </div>
+        
+        <h3 style="font-size: 1.3rem; font-weight: 800; color: var(--dark); margin-bottom: 4px;">
+          Đăng Ký Khám & Cấp Số Thành Công!
+        </h3>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 18px;">
+          Hồ sơ bệnh nhân đã được lưu và xếp vào hàng đợi khám bệnh
+        </p>
+
+        <!-- Thẻ Số Thứ Tự Nổi Bật -->
+        <div style="background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border: 2px dashed #10b981; border-radius: 14px; padding: 16px; margin-bottom: 20px;">
+          <div style="font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #059669; margin-bottom: 4px;">
+            SỐ THỨ TỰ KHÁM BỆNH (STT)
+          </div>
+          <div id="succ-queue-number" style="font-size: 3.4rem; font-weight: 900; color: #047857; line-height: 1; letter-spacing: -1px; text-shadow: 0 2px 6px rgba(4, 120, 87, 0.15);">
+            #01
+          </div>
+          <div id="succ-dept-name" style="display: inline-block; margin-top: 8px; padding: 4px 14px; background: #ffffff; border-radius: 20px; font-size: 0.82rem; font-weight: 700; color: var(--primary); box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
+            Khoa Khám Bệnh - Phòng 101
+          </div>
+        </div>
+
+        <!-- Chi tiết tóm tắt -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; text-align: left; font-size: 0.86rem; margin-bottom: 22px;">
+          <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed #e2e8f0;">
+            <span style="color: #64748b;">Họ và tên bệnh nhân:</span>
+            <strong id="succ-patient-name" style="color: var(--dark);">--</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed #e2e8f0;">
+            <span style="color: #64748b;">Số điện thoại:</span>
+            <strong id="succ-patient-phone" style="color: var(--dark); font-family: monospace;">--</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed #e2e8f0;">
+            <span style="color: #64748b;">Bác sĩ tiếp nhận:</span>
+            <strong id="succ-doctor-name" style="color: var(--primary);">--</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+            <span style="color: #64748b;">Trạng thái:</span>
+            <span style="color: #10b981; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+              ● Đang chờ vào khám
+            </span>
+          </div>
+        </div>
+
+        <!-- Các nút thao tác -->
+        <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary" id="btn-succ-print" style="padding: 10px 18px; font-size: 0.88rem;">
+            🖨️ In Phiếu Khám (STT)
+          </button>
+          <button type="button" class="btn btn-secondary" id="btn-succ-next" style="padding: 10px 16px;">
+            ➕ Tiếp Nhận Ca Khác
+          </button>
+          <button type="button" class="btn btn-secondary" id="btn-succ-close" style="padding: 10px 14px;">
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div> <!-- /#app-wrapper -->
 
   <!-- TOAST NOTIFICATIONS -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script src="app.js?v=7.1"></script>
+  <script src="app.js?v=7.2"></script>
 </body>
 
 </html>

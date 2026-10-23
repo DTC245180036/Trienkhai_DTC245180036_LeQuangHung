@@ -882,10 +882,96 @@ function setupModal() {
       if (statusBanner) statusBanner.style.display = 'none';
       await loadAvailableDates();
       await loadDashboardData();
+
+      // Mở Popup thông báo đăng ký khám & cấp số thành công
+      showReceptionSuccessModal({
+        appointmentId: appData.id,
+        queueNumber: appData.queue_number,
+        patientName: normalizedName,
+        phone: phone,
+        doctorId: doctorId,
+        idcard: idcard,
+        symptoms: symptoms
+      });
     } catch (err) {
       showToast('Lỗi: ' + err.message, 'error');
     }
   });
+}
+
+function showReceptionSuccessModal({ appointmentId, queueNumber, patientName, phone, doctorId, idcard, symptoms }) {
+  const succModal = document.getElementById('modal-reception-success');
+  if (!succModal) return;
+
+  const elQueue = document.getElementById('succ-queue-number');
+  const elDept = document.getElementById('succ-dept-name');
+  const elName = document.getElementById('succ-patient-name');
+  const elPhone = document.getElementById('succ-patient-phone');
+  const elDoc = document.getElementById('succ-doctor-name');
+  const btnPrint = document.getElementById('btn-succ-print');
+  const btnClose = document.getElementById('btn-succ-close');
+  const btnCloseX = document.getElementById('btn-close-succ-modal');
+  const btnNext = document.getElementById('btn-succ-next');
+
+  const doctorObj = (state.doctors || []).find(d => String(d.id) === String(doctorId));
+  const docName = doctorObj ? doctorObj.full_name : 'Bác sĩ phụ trách';
+  const deptName = doctorObj ? doctorObj.department_name : 'Khoa Khám Bệnh';
+  const roomNumber = doctorObj ? doctorObj.room_number : 'P.102';
+  const deptRoom = `🏥 ${deptName} - Phòng ${roomNumber}`;
+
+  // Đảm bảo state.appointments có sẵn thông tin để in phiếu ngay không sợ bị lỗi
+  if (!state.appointments) state.appointments = [];
+  if (!state.appointments.some(a => a.id == appointmentId)) {
+    state.appointments.unshift({
+      id: appointmentId,
+      queue_number: queueNumber,
+      patient_name: patientName,
+      patient_phone: phone,
+      identity_card: idcard || '--',
+      doctor_name: docName,
+      room_number: roomNumber,
+      department_name: deptName,
+      symptoms: symptoms || 'Khám bệnh',
+      status: 'WAITING'
+    });
+  }
+
+  if (elQueue) elQueue.innerText = `#${String(queueNumber).padStart(2, '0')}`;
+  if (elDept) elDept.innerText = deptRoom;
+  if (elName) elName.innerText = patientName || '--';
+  if (elPhone) elPhone.innerText = phone || '--';
+  if (elDoc) elDoc.innerText = docName;
+
+  if (btnPrint) {
+    btnPrint.onclick = () => {
+      window.printQueueTicket(appointmentId);
+    };
+  }
+
+  const closeSuccess = () => {
+    succModal.classList.remove('open');
+  };
+
+  if (btnClose) btnClose.onclick = closeSuccess;
+  if (btnCloseX) btnCloseX.onclick = closeSuccess;
+  succModal.onclick = (e) => {
+    if (e.target === succModal) closeSuccess();
+  };
+
+  if (btnNext) {
+    btnNext.onclick = () => {
+      closeSuccess();
+      const modalPatient = document.getElementById('modal-patient');
+      const form = document.getElementById('form-new-patient');
+      if (form) form.reset();
+      populateDoctorDropdown();
+      if (modalPatient) modalPatient.classList.add('open');
+      const nameInput = document.getElementById('p-name');
+      if (nameInput) nameInput.focus();
+    };
+  }
+
+  succModal.classList.add('open');
 }
 
 window.printQueueTicket = (appointmentId) => {
