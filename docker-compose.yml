@@ -141,6 +141,7 @@ networks:
     driver: bridge
   backend_net:
     driver: bridge
+    internal: true
   monitor_net:
     driver: bridge
 
