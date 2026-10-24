@@ -31,8 +31,10 @@ Hệ thống được đóng gói và điều phối hoàn toàn qua **Docker Co
 | Dịch vụ / Phân hệ | Đường dẫn truy cập | Tài khoản | Mật khẩu | Quyền hạn & Chức năng nghiệp vụ |
 | :--- | :--- | :--- | :--- | :--- |
 | **Cổng Tiếp Tân** | [http://localhost](http://localhost) | `letan01` | `123456` | Tiếp nhận bệnh nhân, kiểm tra hợp lệ CCCD & SĐT, cấp số khám tự động qua Redis, in phiếu số |
-| **Bác Sĩ Khám (P.102)** | [http://localhost](http://localhost) | `bacsi_nam` | `123456` | Mời bệnh nhân vào phòng, khám EMR, nhập sinh hiệu, chẩn đoán, kê đơn theo vỉ/hộp, tạo viện phí |
-| **Bác Sĩ Khám (P.201)** | [http://localhost](http://localhost) | `bacsi_hoa` | `123456` | Khám Tai Mũi Họng, chỉ định CLS & nội soi, kê đơn thuốc chuẩn dược |
+| **Bác Sĩ Nội Khoa (P.102)** | [http://localhost](http://localhost) | `bacsi_nam` | `123456` | Mời bệnh nhân vào phòng, khám EMR, nhập sinh hiệu, chẩn đoán, kê đơn theo vỉ/hộp, tạo viện phí |
+| **Bác Sĩ TMH (P.201)** | [http://localhost](http://localhost) | `bacsi_hoa` | `123456` | Khám Tai Mũi Họng, chỉ định CLS & nội soi, kê đơn thuốc chuẩn dược |
+| **Bác Sĩ Nhi Khoa (P.105)** | [http://localhost](http://localhost) | `bacsi_long` | `123456` | Khám Nhi & Hô Hấp, theo dõi thể trạng bệnh nhi, kê đơn chuẩn chuyên khoa Nhi |
+| **Bác Sĩ CĐHA (P.301)** | [http://localhost](http://localhost) | `bacsi_tuan` | `123456` | Khám và chỉ định Chẩn đoán hình ảnh (Chụp X-quang, Siêu âm màu), đọc kết quả |
 | **Quầy Thu Ngân** | [http://localhost](http://localhost) | `thungan01` | `123456` | Thu tiền viện phí (Tiền mặt / QR Pay), in phiếu thu, xuất bảng kê chốt ca trực ra file Word (.doc) |
 | **Quản Trị / DevOps** | [http://localhost](http://localhost) | `admin` | `123456` | **Chế độ Giám sát toàn quyền:** Giám sát hàng đợi tiếp đón, tiến độ phòng khám, đối soát tài chính, xem sơ đồ hạ tầng, bắn tải test DoS, xuất báo cáo Word. *(Khóa tác nghiệp thu tiền và cấp số để đảm bảo tính minh bạch kiểm toán)* |
 | **Grafana Monitoring** | [http://localhost:3000](http://localhost:3000) | `admin` | `admin` | Giám sát 8 metrics panel (Doanh thu live, CPU, RAM, Network I/O) |
@@ -75,11 +77,12 @@ cp .env.example .env
 > * `PORT=8000`
 
 #### 3. Chạy lệnh khởi chạy toàn bộ hệ thống
-Chạy lệnh `docker compose up -d` để tải các image, build dịch vụ và khởi động đồng thời cả 8 container chạy ngầm trong nền:
+* **Cách 1 (1-Click tiện lợi nhất trên Windows):** Click đúp chuột trực tiếp vào file `start.bat`. File này sẽ tự động kiểm tra Docker Desktop, build image, khởi chạy ngầm 8 container và tự động bật trình duyệt `http://localhost`.
+* **Cách 2 (Lệnh chuẩn Terminal):**
 ```bash
 docker compose up -d --build
 ```
-*(Hoặc click đúp chuột vào file `start.bat` trên Windows để khởi chạy tự động chỉ với 1-click).*
+> **Lưu ý tắt hệ thống an toàn:** Khi kết thúc phiên làm việc, chỉ cần click đúp vào file `stop.bat` (hoặc chạy lệnh `docker compose down`) để dừng và gỡ các container an toàn mà không làm mất dữ liệu trong CSDL.
 
 #### 4. Kiểm tra trạng thái các container
 Kiểm tra đảm bảo toàn bộ 8 container đều đang chạy ổn định (`Up` hoặc `Up (healthy)`):
